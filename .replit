@@ -30,3 +30,8 @@ externalPort = 80
 [[ports]]
 localPort = 19982
 externalPort = 3000
+
+[userenv]
+
+[userenv.shared]
+VITE_DERIV_APP_ID = "33ozhFOslX5hVMU8NiaCZ"

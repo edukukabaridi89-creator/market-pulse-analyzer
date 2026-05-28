@@ -1,4 +1,5 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { useEffect } from "react";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "sonner";
@@ -12,12 +13,39 @@ import Dashboard from "@/pages/Dashboard";
 import Analysis from "@/pages/Analysis";
 import History from "@/pages/History";
 import Settings from "@/pages/Settings";
+import Trade from "@/pages/Trade";
+
 import { TickProvider } from "@/contexts/TickContext";
+import { DerivAuthProvider, extractOAuthTokens, TOKEN_STORAGE_KEY } from "@/contexts/DerivAuthContext";
 
 const queryClient = new QueryClient();
 
 if (typeof document !== "undefined") {
   document.documentElement.classList.add("dark");
+}
+
+function OAuthCallback() {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    const token = extractOAuthTokens();
+    if (token) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, token);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setLocation("/trade");
+    } else {
+      setLocation("/trade");
+    }
+  }, [setLocation]);
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-muted-foreground font-mono text-sm uppercase tracking-widest">Authorizing with Deriv...</span>
+      </div>
+    </div>
+  );
 }
 
 function Router() {
@@ -30,6 +58,8 @@ function Router() {
       <Route path="/analysis" component={Analysis} />
       <Route path="/history" component={History} />
       <Route path="/settings" component={Settings} />
+      <Route path="/trade" component={Trade} />
+      <Route path="/callback" component={OAuthCallback} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -39,11 +69,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <TickProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-        </TickProvider>
+        <DerivAuthProvider>
+          <TickProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Router />
+            </WouterRouter>
+          </TickProvider>
+        </DerivAuthProvider>
         <ShadcnToaster />
         <SonnerToaster theme="dark" position="bottom-right" />
       </TooltipProvider>
