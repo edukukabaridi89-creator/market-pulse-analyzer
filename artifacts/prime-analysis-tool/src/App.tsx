@@ -9,8 +9,16 @@ import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import Dashboard from "@/pages/Dashboard";
+import Analysis from "@/pages/Analysis";
+import History from "@/pages/History";
+import Settings from "@/pages/Settings";
+import { TickProvider } from "@/contexts/TickContext";
 
 const queryClient = new QueryClient();
+
+if (typeof document !== "undefined") {
+  document.documentElement.classList.add("dark");
+}
 
 function Router() {
   return (
@@ -19,23 +27,23 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/analysis" component={Analysis} />
+      <Route path="/history" component={History} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
 function App() {
-  // Ensure dark mode is strictly enforced globally
-  if (typeof document !== "undefined") {
-    document.documentElement.classList.add("dark");
-  }
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
+        <TickProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+        </TickProvider>
         <ShadcnToaster />
         <SonnerToaster theme="dark" position="bottom-right" />
       </TooltipProvider>

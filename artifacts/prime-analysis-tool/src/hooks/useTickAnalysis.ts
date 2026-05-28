@@ -235,6 +235,23 @@ export function useTickAnalysis(
   }, [ticks, analysisType, barrier]);
 }
 
+export const ANALYSIS_TYPES: { type: AnalysisType; label: string; hasBarrier: boolean; barrierLabel: string }[] = [
+  { type: "even",    label: "Even",    hasBarrier: false, barrierLabel: "" },
+  { type: "odd",     label: "Odd",     hasBarrier: false, barrierLabel: "" },
+  { type: "over",    label: "Over",    hasBarrier: true,  barrierLabel: "Barrier" },
+  { type: "under",   label: "Under",   hasBarrier: true,  barrierLabel: "Barrier" },
+  { type: "matches", label: "Matches", hasBarrier: true,  barrierLabel: "Digit" },
+  { type: "differs", label: "Differs", hasBarrier: true,  barrierLabel: "Digit" },
+];
+
+export function generateAllTypeAdvice(ticks: Tick[], hotDigit: number) {
+  return ANALYSIS_TYPES.map(at => {
+    const barrier = at.hasBarrier ? (at.type === "matches" || at.type === "differs" ? hotDigit : 4) : 4;
+    const advice = generateAdvice(at.type, barrier, ticks);
+    return { type: at.type, label: at.label, advice };
+  });
+}
+
 export function getMultiMarketAdvice(
   tickMap: Record<string, Tick[]>,
   analysisType: AnalysisType,
