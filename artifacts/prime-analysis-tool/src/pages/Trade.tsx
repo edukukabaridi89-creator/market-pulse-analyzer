@@ -15,9 +15,9 @@ import {
   analysisTypeToContract,
   contractTypeLabel,
   TradeResult,
-  ContractType,
 } from "@/hooks/useDerivTrading";
 import { useTickAnalysis, ANALYSIS_TYPES } from "@/hooks/useTickAnalysis";
+import { VOLATILITY_MARKETS } from "@/hooks/useDerivWS";
 import { Sidebar } from "@/components/Sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,9 +38,9 @@ export default function Trade() {
     analysisType, setAnalysisType, barrier, setBarrier,
     filterTicks, marketInfo,
   } = useTick();
-  const { account, isDerivAuthed, isAuthorizing, loginWithDeriv, setBalance, appId } = useDerivAuth();
+  const { derivToken, account, isDerivAuthed, isAuthorizing, loginWithDeriv, setBalance, appId } = useDerivAuth();
   const { trades, isBuying, buyContract, totalProfit } = useDerivTrading(
-    useDerivAuth().derivToken,
+    derivToken,
     setBalance
   );
 
@@ -197,11 +197,7 @@ export default function Trade() {
                   <div className="space-y-2">
                     <label className="text-xs text-muted-foreground uppercase tracking-wider">Market</label>
                     <div className="flex flex-wrap gap-2">
-                      {[
-                        { symbol: "R_10", label: "V10" }, { symbol: "R_25", label: "V25" },
-                        { symbol: "R_50", label: "V50" }, { symbol: "R_75", label: "V75" },
-                        { symbol: "R_100", label: "V100" },
-                      ].map(m => (
+                      {VOLATILITY_MARKETS.map(m => (
                         <button
                           key={m.symbol}
                           onClick={() => setMarket(m.symbol)}
