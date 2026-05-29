@@ -12,6 +12,7 @@ import { useTickAnalysis, ANALYSIS_TYPES, TRADE_CATEGORIES, getMultiMarketAdvice
 import { VOLATILITY_MARKETS } from "@/hooks/useDerivWS";
 import { useDerivAuth } from "@/contexts/DerivAuthContext";
 import { useDerivTrading, analysisTypeToContract, ContractType } from "@/hooks/useDerivTrading";
+import { AIScanner } from "@/components/AIScanner";
 import { Sidebar } from "@/components/Sidebar";
 import { AdviceCard } from "@/components/AdviceCard";
 import { DigitHeatmap } from "@/components/DigitHeatmap";
@@ -45,7 +46,7 @@ export default function Dashboard() {
   } = useTick();
 
   const { isDerivAuthed, account, loginWithDeriv, setBalance } = useDerivAuth();
-  const { buyContract, isBuying } = useDerivTrading(
+  const { buyContract, isBuying, trades } = useDerivTrading(
     isDerivAuthed ? localStorage.getItem("deriv_oauth_token") : null,
     setBalance
   );
@@ -144,15 +145,27 @@ export default function Dashboard() {
               {isConnectedAll ? "LIVE" : "DISCONNECTED"}
             </Badge>
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            className="rounded-full w-9 h-9 border-white/10"
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            data-testid="button-sound-toggle"
-          >
-            {soundEnabled ? <Volume2 className="w-4 h-4 text-primary" /> : <VolumeX className="w-4 h-4 text-muted-foreground" />}
-          </Button>
+          <div className="flex items-center gap-2">
+            <AIScanner
+              tickMap={tickMap}
+              isDerivAuthed={isDerivAuthed}
+              account={account}
+              loginWithDeriv={loginWithDeriv}
+              buyContract={buyContract}
+              trades={trades}
+              isBuying={isBuying}
+              barrier={barrier}
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full w-9 h-9 border-white/10"
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              data-testid="button-sound-toggle"
+            >
+              {soundEnabled ? <Volume2 className="w-4 h-4 text-primary" /> : <VolumeX className="w-4 h-4 text-muted-foreground" />}
+            </Button>
+          </div>
         </header>
 
         <div className="p-4 md:p-6 space-y-4 max-w-[1600px] mx-auto w-full">
