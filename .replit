@@ -34,4 +34,4 @@ externalPort = 3000
 [userenv]
 
 [userenv.shared]
-VITE_DERIV_APP_ID = "33ozhFOslX5hVMU8NiaCZ"
+VITE_DERIV_APP_ID = "110877"
