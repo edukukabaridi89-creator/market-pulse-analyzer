@@ -3,13 +3,15 @@ import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity, Volume2, VolumeX, TrendingUp, TrendingDown,
-  BarChart2, Layers, ChevronDown,
+  BarChart2, Layers, ChevronDown, ShoppingCart, X, Wallet, ExternalLink, Loader2,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useTick } from "@/contexts/TickContext";
 import { useTickAnalysis, ANALYSIS_TYPES, TRADE_CATEGORIES, getMultiMarketAdvice, generateAllTypeAdvice } from "@/hooks/useTickAnalysis";
 import { VOLATILITY_MARKETS } from "@/hooks/useDerivWS";
+import { useDerivAuth } from "@/contexts/DerivAuthContext";
+import { useDerivTrading, analysisTypeToContract, ContractType } from "@/hooks/useDerivTrading";
 import { Sidebar } from "@/components/Sidebar";
 import { AdviceCard } from "@/components/AdviceCard";
 import { DigitHeatmap } from "@/components/DigitHeatmap";
@@ -17,9 +19,18 @@ import { ConfidenceMeter } from "@/components/ConfidenceMeter";
 import { TickChart } from "@/components/TickChart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+
+interface QuickBuyTarget {
+  type: string;
+  label: string;
+  contractType: ContractType;
+  barrierStr?: string;
+  probability: number;
+}
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -33,9 +44,40 @@ export default function Dashboard() {
     filterTicks, marketInfo,
   } = useTick();
 
+  const { isDerivAuthed, account, loginWithDeriv, setBalance } = useDerivAuth();
+  const { buyContract, isBuying } = useDerivTrading(
+    isDerivAuthed ? localStorage.getItem("deriv_oauth_token") : null,
+    setBalance
+  );
+
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [showMarketDropdown, setShowMarketDropdown] = useState(false);
+  const [quickBuy, setQuickBuy] = useState<QuickBuyTarget | null>(null);
+  const [quickBuyStake, setQuickBuyStake] = useState("1");
   const audioCtxRef = useRef<AudioContext | null>(null);
+
+  const openQuickBuy = (type: string, label: string, probability: number) => {
+    const { contractType, barrier: barrierStr } = analysisTypeToContract(type, barrier);
+    setQuickBuy({ type, label, contractType, barrierStr, probability });
+  };
+
+  const handleQuickBuy = async () => {
+    if (!quickBuy) return;
+    const stake = parseFloat(quickBuyStake);
+    if (isNaN(stake) || stake <= 0) return;
+    const isMultiplier = quickBuy.contractType === "MULTUP" || quickBuy.contractType === "MULTDOWN";
+    await buyContract({
+      contractType: quickBuy.contractType,
+      symbol: market,
+      stake,
+      currency: account?.currency || "USD",
+      barrier: quickBuy.barrierStr,
+      duration: isMultiplier ? undefined : 5,
+      durationUnit: isMultiplier ? undefined : "t",
+      multiplier: isMultiplier ? 10 : undefined,
+    });
+    setQuickBuy(null);
+  };
 
   const windowTicks = filterTicks(ticks);
   const analysis = useTickAnalysis(windowTicks, analysisType, barrier);
@@ -284,10 +326,10 @@ export default function Dashboard() {
                             const isAvoid = advice.action === "AVOID";
                             const isActive = analysisType === type;
                             return (
-                              <button
+                              <div
                                 key={type}
                                 onClick={() => setAnalysisType(type)}
-                                className={`rounded-xl border p-2.5 text-left transition-all hover:scale-[1.01] ${isBuy ? "border-green-500/30 bg-green-500/10" : isAvoid ? "border-red-500/20 bg-red-500/5" : "border-white/5 bg-white/[0.02]"} ${isActive ? "ring-1 ring-primary/50" : ""}`}
+                                className={`rounded-xl border p-2.5 text-left transition-all hover:scale-[1.01] cursor-pointer ${isBuy ? "border-green-500/30 bg-green-500/10" : isAvoid ? "border-red-500/20 bg-red-500/5" : "border-white/5 bg-white/[0.02]"} ${isActive ? "ring-1 ring-primary/50" : ""}`}
                               >
                                 <div className="flex items-center justify-between mb-1">
                                   <span className="text-xs font-bold text-white">{label}</span>
@@ -306,7 +348,15 @@ export default function Dashboard() {
                                     style={{ width: `${advice.probability}%` }}
                                   />
                                 </div>
-                              </button>
+                                {isBuy && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); openQuickBuy(type, label, advice.probability); }}
+                                    className="mt-2 w-full flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 text-green-400 text-[10px] font-bold transition-all"
+                                  >
+                                    <ShoppingCart className="w-3 h-3" /> Trade
+                                  </button>
+                                )}
+                              </div>
                             );
                           })}
                         </div>
@@ -451,6 +501,144 @@ export default function Dashboard() {
           )}
         </div>
       </main>
+
+      {/* ── QUICK BUY MODAL ── */}
+      <AnimatePresence>
+        {quickBuy && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setQuickBuy(null)}
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+            />
+            {/* Panel */}
+            <motion.div
+              initial={{ opacity: 0, y: 60, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 60, scale: 0.96 }}
+              transition={{ type: "spring", stiffness: 300, damping: 28 }}
+              className="fixed bottom-0 left-0 right-0 z-50 md:inset-0 md:flex md:items-center md:justify-center pointer-events-none"
+            >
+              <div className="pointer-events-auto w-full md:w-[420px] glass-card border border-white/10 rounded-t-3xl md:rounded-3xl p-6 shadow-2xl">
+
+                {/* Header */}
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-green-500/20 border border-green-500/30 flex items-center justify-center">
+                      <ShoppingCart className="w-4 h-4 text-green-400" />
+                    </div>
+                    <div>
+                      <div className="text-white font-bold text-sm">{quickBuy.label}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{market} · {quickBuy.contractType}</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setQuickBuy(null)}
+                    className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+                  >
+                    <X className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                </div>
+
+                {/* Signal confidence bar */}
+                <div className="mb-5 p-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-muted-foreground">Signal Confidence</span>
+                    <span className="text-green-400 font-bold">{quickBuy.probability}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-full bg-green-400 rounded-full" style={{ width: `${quickBuy.probability}%` }} />
+                  </div>
+                  {quickBuy.barrierStr && (
+                    <div className="mt-2 text-xs text-muted-foreground">Barrier: <span className="text-white font-mono">{quickBuy.barrierStr}</span></div>
+                  )}
+                </div>
+
+                {/* Not authed → show connect prompt */}
+                {!isDerivAuthed ? (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-300 leading-relaxed">
+                      You need to connect your Deriv account to place trades. This uses your Deriv balance directly via OAuth — we never store your password.
+                    </div>
+                    <Button
+                      onClick={loginWithDeriv}
+                      className="w-full h-12 bg-gradient-to-r from-primary to-[#0055ff] border-none text-white font-semibold text-sm"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Connect Deriv Account
+                    </Button>
+                    <p className="text-center text-xs text-muted-foreground">
+                      Redirects to Deriv OAuth · App ID {import.meta.env.VITE_DERIV_APP_ID || "110877"}
+                    </p>
+                  </div>
+                ) : (
+                  /* Authed → show trade form */
+                  <div className="space-y-4">
+                    {/* Account badge */}
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-white/5 border border-white/5">
+                      <Wallet className="w-4 h-4 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-muted-foreground truncate">{account?.loginid}</div>
+                        <div className="text-sm font-bold text-white">{account?.balance?.toFixed(2)} {account?.currency}</div>
+                      </div>
+                      {account?.isVirtual && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">DEMO</span>
+                      )}
+                    </div>
+
+                    {/* Stake input */}
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1.5">Stake ({account?.currency || "USD"})</label>
+                      <Input
+                        type="number"
+                        min="0.35"
+                        step="0.5"
+                        value={quickBuyStake}
+                        onChange={e => setQuickBuyStake(e.target.value)}
+                        className="bg-white/5 border-white/10 text-white font-mono text-lg h-12"
+                        placeholder="1.00"
+                      />
+                    </div>
+
+                    {/* Quick stake presets */}
+                    <div className="flex gap-2">
+                      {["0.50", "1", "2", "5", "10"].map(v => (
+                        <button
+                          key={v}
+                          onClick={() => setQuickBuyStake(v)}
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${quickBuyStake === v ? "bg-primary/20 border-primary/50 text-primary" : "border-white/10 text-muted-foreground hover:text-white hover:bg-white/5"}`}
+                        >
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Buy button */}
+                    <Button
+                      onClick={handleQuickBuy}
+                      disabled={isBuying || !quickBuyStake || parseFloat(quickBuyStake) <= 0}
+                      className="w-full h-12 bg-gradient-to-r from-green-500 to-emerald-600 border-none text-white font-bold text-sm shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:opacity-90 disabled:opacity-50"
+                    >
+                      {isBuying ? (
+                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Placing Trade...</>
+                      ) : (
+                        <><ShoppingCart className="w-4 h-4 mr-2" /> Buy {quickBuy.label} — {quickBuyStake || "0"} {account?.currency || "USD"}</>
+                      )}
+                    </Button>
+
+                    <p className="text-center text-[10px] text-muted-foreground">
+                      5-tick contract · Trade at your own risk
+                    </p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
