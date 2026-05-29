@@ -8,7 +8,7 @@ import {
 
 import { useAuth } from "@/hooks/useAuth";
 import { useTick } from "@/contexts/TickContext";
-import { useTickAnalysis, ANALYSIS_TYPES, getMultiMarketAdvice, generateAllTypeAdvice } from "@/hooks/useTickAnalysis";
+import { useTickAnalysis, ANALYSIS_TYPES, TRADE_CATEGORIES, getMultiMarketAdvice, generateAllTypeAdvice } from "@/hooks/useTickAnalysis";
 import { VOLATILITY_MARKETS } from "@/hooks/useDerivWS";
 import { Sidebar } from "@/components/Sidebar";
 import { AdviceCard } from "@/components/AdviceCard";
@@ -260,45 +260,59 @@ export default function Dashboard() {
                 {analysis && <AdviceCard advice={analysis.advice} />}
 
                 {/* ── ALL TRADE TYPE SIGNALS ── */}
-                <div className="glass-card rounded-2xl border border-white/5 p-4">
-                  <div className="text-xs font-mono text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                <div className="glass-card rounded-2xl border border-white/5 p-4 space-y-4">
+                  <div className="text-xs font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                     <Activity className="w-3.5 h-3.5" /> All Trade Type Signals — Live
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {allSignals.map(({ type, label, advice }) => {
-                      const isBuy   = advice.action === "BUY";
-                      const isAvoid = advice.action === "AVOID";
-                      const isActive = analysisType === type;
-                      const bg = isBuy ? "border-green-500/30 bg-green-500/10" : isAvoid ? "border-red-500/20 bg-red-500/5" : "border-white/5 bg-white/[0.02]";
-                      const badgeColor = isBuy ? "text-green-400 bg-green-500/20 border-green-500/30" : isAvoid ? "text-red-400 bg-red-500/20 border-red-500/30" : "text-yellow-400 bg-yellow-500/10 border-yellow-500/20";
-                      return (
-                        <button
-                          key={type}
-                          onClick={() => setAnalysisType(type)}
-                          className={`rounded-xl border p-3 text-left transition-all hover:scale-[1.02] ${bg} ${isActive ? "ring-1 ring-primary/50" : ""}`}
-                        >
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-xs font-bold text-white">{label}</span>
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${badgeColor}`}>
-                              {advice.action}
+                  {TRADE_CATEGORIES.map(cat => {
+                    const catSignals = allSignals.filter(s => s.category === cat.id);
+                    const buyCount = catSignals.filter(s => s.advice.action === "BUY").length;
+                    return (
+                      <div key={cat.id} className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{cat.label}</span>
+                          {buyCount > 0 && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">
+                              {buyCount} BUY
                             </span>
-                          </div>
-                          <div className="flex items-end justify-between">
-                            <span className={`text-xl font-black ${isBuy ? "text-green-400" : isAvoid ? "text-red-400" : "text-yellow-400"}`}>
-                              {advice.probability}%
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">{advice.contractType}</span>
-                          </div>
-                          <div className="mt-1.5 h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-700 ${isBuy ? "bg-green-400" : isAvoid ? "bg-red-400" : "bg-yellow-400"}`}
-                              style={{ width: `${advice.probability}%` }}
-                            />
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                          )}
+                          <div className="flex-1 h-px bg-white/5" />
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                          {catSignals.map(({ type, label, advice }) => {
+                            const isBuy   = advice.action === "BUY";
+                            const isAvoid = advice.action === "AVOID";
+                            const isActive = analysisType === type;
+                            return (
+                              <button
+                                key={type}
+                                onClick={() => setAnalysisType(type)}
+                                className={`rounded-xl border p-2.5 text-left transition-all hover:scale-[1.01] ${isBuy ? "border-green-500/30 bg-green-500/10" : isAvoid ? "border-red-500/20 bg-red-500/5" : "border-white/5 bg-white/[0.02]"} ${isActive ? "ring-1 ring-primary/50" : ""}`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-bold text-white">{label}</span>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${isBuy ? "text-green-400 bg-green-500/20 border-green-500/30" : isAvoid ? "text-red-400 bg-red-500/20 border-red-500/30" : "text-yellow-400 bg-yellow-500/10 border-yellow-500/20"}`}>
+                                    {advice.action}
+                                  </span>
+                                </div>
+                                <div className="flex items-end justify-between">
+                                  <span className={`text-lg font-black ${isBuy ? "text-green-400" : isAvoid ? "text-red-400" : "text-yellow-400"}`}>
+                                    {advice.probability}%
+                                  </span>
+                                </div>
+                                <div className="mt-1 h-0.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-700 ${isBuy ? "bg-green-400" : isAvoid ? "bg-red-400" : "bg-yellow-400"}`}
+                                    style={{ width: `${advice.probability}%` }}
+                                  />
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

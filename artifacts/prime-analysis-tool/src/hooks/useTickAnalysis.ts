@@ -1,7 +1,15 @@
 import { useMemo } from "react";
 import { Tick } from "./useDerivWS";
 
-export type AnalysisType = "even" | "odd" | "over" | "under" | "matches" | "differs";
+export type TradeCategory = "digits" | "rise_fall" | "higher_lower" | "touch" | "ends" | "multipliers";
+
+export type AnalysisType =
+  | "even" | "odd" | "over" | "under" | "matches" | "differs"
+  | "rise" | "fall"
+  | "higher" | "lower"
+  | "touch" | "no_touch"
+  | "ends_in" | "ends_out"
+  | "multiplier_up" | "multiplier_down";
 
 export interface TradeAdvice {
   action: "BUY" | "WAIT" | "AVOID";
@@ -27,27 +35,52 @@ function getRisk(prob: number): TradeAdvice["risk"] {
   return "High";
 }
 
-function generateAdvice(
-  type: AnalysisType,
-  barrier: number,
-  ticks: Tick[]
-): TradeAdvice {
+// ── Price stats helper ────────────────────────────────────────────────────────
+interface PriceStats {
+  prices: number[];
+  n: number;
+  avg: number;
+  stdDev: number;
+  current: number;
+  upPct: number;   // % of ticks that moved up
+  avgMove: number; // avg absolute tick-to-tick move as % of price
+  streak: number;  // consecutive up (positive) or down (negative) moves from newest
+}
+
+function getPriceStats(ticks: Tick[]): PriceStats | null {
+  const prices = ticks.slice(0, 50).map(t => t.quote);
+  const n = prices.length;
+  if (n < 3) return null;
+  const avg = prices.reduce((a, b) => a + b) / n;
+  const stdDev = Math.sqrt(prices.reduce((sum, p) => sum + Math.pow(p - avg, 2), 0) / n);
+  const current = prices[0];
+  const upMoves = prices.slice(0, n - 1).filter((p, i) => p > prices[i + 1]).length;
+  const upPct = Math.round((upMoves / (n - 1)) * 100);
+  const avgMove = prices.slice(0, n - 1)
+    .reduce((sum, p, i) => sum + Math.abs(p - prices[i + 1]) / prices[i + 1] * 100, 0) / (n - 1);
+  let streak = 0;
+  for (let i = 0; i < Math.min(10, n - 1); i++) {
+    if (prices[i] > prices[i + 1]) streak++;
+    else if (prices[i] < prices[i + 1]) { streak = streak > 0 ? streak : streak - 1; break; }
+    else break;
+  }
+  return { prices, n, avg, stdDev, current, upPct, avgMove, streak };
+}
+
+// ── Main advice generator ─────────────────────────────────────────────────────
+function generateAdvice(type: AnalysisType, barrier: number, ticks: Tick[]): TradeAdvice {
   const sample = ticks.slice(0, 100);
   const n = sample.length;
 
   if (n < 10) {
     return {
-      action: "WAIT",
-      label: "Collecting data...",
-      probability: 0,
-      confidence: "LOW",
-      reason: "Not enough ticks collected yet. Wait for at least 10 ticks.",
-      entry: "Wait for more data.",
-      risk: "High",
-      contractType: type.toUpperCase(),
+      action: "WAIT", label: "Collecting data...", probability: 0, confidence: "LOW",
+      reason: "Not enough ticks yet. Wait for at least 10 ticks.",
+      entry: "Wait for more data.", risk: "High", contractType: type.toUpperCase(),
     };
   }
 
+  // ── DIGITS ────────────────────────────────────────────────────────────────
   const frequencies = Array(10).fill(0);
   sample.forEach(t => frequencies[t.lastDigit]++);
 
@@ -56,17 +89,10 @@ function generateAdvice(
     const prob = Math.round((evenCount / n) * 100);
     const action: TradeAdvice["action"] = prob >= 53 ? "BUY" : prob <= 47 ? "AVOID" : "WAIT";
     return {
-      action,
-      label: action === "BUY" ? "BUY EVEN" : action === "AVOID" ? "AVOID EVEN" : "WAIT",
-      probability: prob,
-      confidence: getConfidenceLabel(prob),
-      reason: `${evenCount} of last ${n} digits were even (${prob}%). Even digits (0,2,4,6,8) ${prob >= 55 ? "are dominant" : prob <= 45 ? "are underrepresented — odd bias detected" : "are balanced"}.`,
-      entry: prob >= 55
-        ? `Place an EVEN trade now. Probability favours even outcome.`
-        : prob <= 45
-        ? `Odd digits dominate. Consider an ODD trade instead.`
-        : `Distribution is balanced. Wait for a clearer signal (>55% bias).`,
-      risk: getRisk(prob),
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: getRisk(prob),
+      label: action === "BUY" ? "BUY EVEN" : action === "AVOID" ? "AVOID" : "WAIT",
+      reason: `${evenCount}/${n} digits were even (${prob}%). ${prob >= 55 ? "Even bias detected." : prob <= 45 ? "Odd bias detected." : "Balanced distribution."}`,
+      entry: prob >= 55 ? "Place an EVEN trade." : prob <= 45 ? "Odd digits dominate — consider ODD." : "Wait for >55% bias.",
       contractType: "Digits — Even",
     };
   }
@@ -76,17 +102,10 @@ function generateAdvice(
     const prob = Math.round((oddCount / n) * 100);
     const action: TradeAdvice["action"] = prob >= 53 ? "BUY" : prob <= 47 ? "AVOID" : "WAIT";
     return {
-      action,
-      label: action === "BUY" ? "BUY ODD" : action === "AVOID" ? "AVOID ODD" : "WAIT",
-      probability: prob,
-      confidence: getConfidenceLabel(prob),
-      reason: `${oddCount} of last ${n} digits were odd (${prob}%). Odd digits (1,3,5,7,9) ${prob >= 55 ? "are dominant" : prob <= 45 ? "are underrepresented — even bias detected" : "are balanced"}.`,
-      entry: prob >= 55
-        ? `Place an ODD trade now. Probability favours odd outcome.`
-        : prob <= 45
-        ? `Even digits dominate. Consider an EVEN trade instead.`
-        : `Distribution is balanced. Wait for a clearer signal (>55% bias).`,
-      risk: getRisk(prob),
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: getRisk(prob),
+      label: action === "BUY" ? "BUY ODD" : action === "AVOID" ? "AVOID" : "WAIT",
+      reason: `${oddCount}/${n} digits were odd (${prob}%). ${prob >= 55 ? "Odd bias detected." : prob <= 45 ? "Even bias detected." : "Balanced distribution."}`,
+      entry: prob >= 55 ? "Place an ODD trade." : prob <= 45 ? "Even digits dominate — consider EVEN." : "Wait for >55% bias.",
       contractType: "Digits — Odd",
     };
   }
@@ -96,15 +115,10 @@ function generateAdvice(
     const prob = Math.round((overCount / n) * 100);
     const action: TradeAdvice["action"] = prob >= 53 ? "BUY" : "WAIT";
     return {
-      action,
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: getRisk(prob),
       label: action === "BUY" ? `BUY OVER ${barrier}` : "WAIT",
-      probability: prob,
-      confidence: getConfidenceLabel(prob),
-      reason: `${overCount} of last ${n} digits were above ${barrier} (digits ${barrier + 1}–9). That's ${prob}% of ticks.`,
-      entry: prob >= 53
-        ? `Place an OVER ${barrier} trade. ${prob}% of recent digits exceeded this barrier.`
-        : `Only ${prob}% chance based on recent data. Increase barrier or wait for stronger pattern.`,
-      risk: getRisk(prob),
+      reason: `${overCount}/${n} digits were above ${barrier} (digits ${barrier + 1}–9). That's ${prob}%.`,
+      entry: prob >= 53 ? `Place OVER ${barrier}. ${prob}% chance.` : `Only ${prob}%. Wait or raise barrier.`,
       contractType: `Digits — Over ${barrier}`,
     };
   }
@@ -114,15 +128,10 @@ function generateAdvice(
     const prob = Math.round((underCount / n) * 100);
     const action: TradeAdvice["action"] = prob >= 53 ? "BUY" : "WAIT";
     return {
-      action,
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: getRisk(prob),
       label: action === "BUY" ? `BUY UNDER ${barrier}` : "WAIT",
-      probability: prob,
-      confidence: getConfidenceLabel(prob),
-      reason: `${underCount} of last ${n} digits were below ${barrier} (digits 0–${barrier - 1}). That's ${prob}% of ticks.`,
-      entry: prob >= 53
-        ? `Place an UNDER ${barrier} trade. ${prob}% of recent digits were below this barrier.`
-        : `Only ${prob}% chance based on recent data. Lower the barrier or wait for a pattern shift.`,
-      risk: getRisk(prob),
+      reason: `${underCount}/${n} digits were below ${barrier} (digits 0–${barrier - 1}). That's ${prob}%.`,
+      entry: prob >= 53 ? `Place UNDER ${barrier}. ${prob}% chance.` : `Only ${prob}%. Wait or lower barrier.`,
       contractType: `Digits — Under ${barrier}`,
     };
   }
@@ -130,22 +139,14 @@ function generateAdvice(
   if (type === "matches") {
     const matchCount = frequencies[barrier];
     const prob = Math.round((matchCount / n) * 100);
-    const expectedProb = 10;
-    const isHot = prob > expectedProb + 3;
-    const action: TradeAdvice["action"] = isHot ? "BUY" : "WAIT";
-    const sortedDigits = [...frequencies.map((f, i) => ({ digit: i, freq: f }))]
-      .sort((a, b) => b.freq - a.freq);
-    const topDigit = sortedDigits[0];
+    const isHot = prob > 13;
+    const sortedDigits = frequencies.map((f, i) => ({ digit: i, freq: f })).sort((a, b) => b.freq - a.freq);
     return {
-      action,
-      label: action === "BUY" ? `BUY MATCHES ${barrier}` : `WAIT — Consider ${topDigit.digit}`,
-      probability: prob,
-      confidence: getConfidenceLabel(prob + 40),
-      reason: `Digit ${barrier} appeared ${matchCount} times in last ${n} ticks (${prob}% vs expected 10%). ${isHot ? `This digit is HOT — above average frequency.` : `This digit is COLD — below average frequency.`} Hottest digit right now: ${topDigit.digit} (${Math.round(topDigit.freq / n * 100)}%).`,
-      entry: isHot
-        ? `Bet MATCHES ${barrier}. This digit is running hot — ${prob}% recent frequency.`
-        : `Digit ${barrier} is cold. Better to bet MATCHES ${topDigit.digit} (hottest at ${Math.round(topDigit.freq / n * 100)}%) or wait for digit ${barrier} to heat up.`,
-      risk: isHot ? "Medium" : "High",
+      action: isHot ? "BUY" : "WAIT",
+      label: isHot ? `BUY MATCHES ${barrier}` : `WAIT — Hottest: ${sortedDigits[0].digit}`,
+      probability: prob, confidence: getConfidenceLabel(prob + 40), risk: isHot ? "Medium" : "High",
+      reason: `Digit ${barrier} appeared ${matchCount}/${n} times (${prob}% vs 10% expected). ${isHot ? "HOT digit." : "COLD digit."} Hottest: ${sortedDigits[0].digit} (${Math.round(sortedDigits[0].freq / n * 100)}%).`,
+      entry: isHot ? `Bet MATCHES ${barrier} — running hot at ${prob}%.` : `Digit ${barrier} is cold. Consider MATCHES ${sortedDigits[0].digit} instead.`,
       contractType: `Digits — Matches ${barrier}`,
     };
   }
@@ -154,101 +155,250 @@ function generateAdvice(
     const matchCount = frequencies[barrier];
     const differsProb = Math.round(((n - matchCount) / n) * 100);
     const isHot = matchCount / n > 0.13;
-    const action: TradeAdvice["action"] = isHot ? "AVOID" : "BUY";
     return {
-      action,
-      label: action === "BUY" ? `BUY DIFFERS ${barrier}` : `AVOID DIFFERS ${barrier}`,
-      probability: differsProb,
-      confidence: getConfidenceLabel(differsProb),
-      reason: `Digit ${barrier} appeared ${matchCount} times (${Math.round(matchCount / n * 100)}%). DIFFERS wins when the outcome is NOT ${barrier}. ${isHot ? `Warning: digit ${barrier} is HOT — higher-than-usual match risk.` : `Digit ${barrier} is cold — good conditions for DIFFERS.`}`,
-      entry: action === "BUY"
-        ? `Place DIFFERS ${barrier}. Digit ${barrier} is cold (${Math.round(matchCount / n * 100)}% frequency) — favourable conditions for a differs trade.`
-        : `Digit ${barrier} is hot right now. DIFFERS ${barrier} is risky. Wait for it to cool down.`,
-      risk: isHot ? "High" : "Low",
+      action: isHot ? "AVOID" : "BUY",
+      label: isHot ? `AVOID DIFFERS ${barrier}` : `BUY DIFFERS ${barrier}`,
+      probability: differsProb, confidence: getConfidenceLabel(differsProb), risk: isHot ? "High" : "Low",
+      reason: `Digit ${barrier} appeared ${matchCount}/${n} times (${Math.round(matchCount / n * 100)}%). DIFFERS wins when outcome ≠ ${barrier}. ${isHot ? "Digit is HOT — risky." : "Digit is COLD — favourable."}`,
+      entry: !isHot ? `Place DIFFERS ${barrier}. Digit ${barrier} is cold.` : `Digit ${barrier} is hot. DIFFERS risky. Wait for it to cool.`,
       contractType: `Digits — Differs ${barrier}`,
     };
   }
 
-  return {
-    action: "WAIT",
-    label: "WAIT",
-    probability: 0,
-    confidence: "LOW",
-    reason: "Select an analysis type.",
-    entry: "",
-    risk: "High",
-    contractType: "",
-  };
+  // ── RISE / FALL ───────────────────────────────────────────────────────────
+  const ps = getPriceStats(ticks);
+
+  if (type === "rise") {
+    if (!ps) return waitAdvice("Rise (Call)");
+    const prob = ps.upPct;
+    const action: TradeAdvice["action"] = prob >= 55 ? "BUY" : prob <= 45 ? "AVOID" : "WAIT";
+    return {
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: getRisk(prob),
+      label: action === "BUY" ? "BUY RISE" : action === "AVOID" ? "AVOID RISE" : "WAIT",
+      reason: `${ps.upPct}% of recent ${ps.n - 1} tick-moves were upward. ${prob >= 55 ? "Clear uptrend." : prob <= 45 ? "Downtrend dominant." : "Price is moving sideways."}`,
+      entry: prob >= 55 ? `Buy RISE (Call). Price is trending up (${prob}% up-moves).` : prob <= 45 ? "Downtrend detected — consider FALL instead." : "Sideways price action. Wait for a clear trend.",
+      contractType: "Rise (Call)",
+    };
+  }
+
+  if (type === "fall") {
+    if (!ps) return waitAdvice("Fall (Put)");
+    const prob = 100 - ps.upPct;
+    const action: TradeAdvice["action"] = prob >= 55 ? "BUY" : prob <= 45 ? "AVOID" : "WAIT";
+    return {
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: getRisk(prob),
+      label: action === "BUY" ? "BUY FALL" : action === "AVOID" ? "AVOID FALL" : "WAIT",
+      reason: `${prob}% of recent tick-moves were downward. ${prob >= 55 ? "Clear downtrend." : prob <= 45 ? "Uptrend dominant." : "Sideways action."}`,
+      entry: prob >= 55 ? `Buy FALL (Put). Price is trending down (${prob}% down-moves).` : prob <= 45 ? "Uptrend detected — consider RISE instead." : "No clear trend. Wait for direction.",
+      contractType: "Fall (Put)",
+    };
+  }
+
+  // ── HIGHER / LOWER ────────────────────────────────────────────────────────
+  if (type === "higher") {
+    if (!ps) return waitAdvice("Higher (Call+barrier)");
+    const prob = ps.upPct;
+    const barrierAmt = (ps.stdDev * 0.5).toFixed(5);
+    const action: TradeAdvice["action"] = prob >= 55 ? "BUY" : prob <= 45 ? "AVOID" : "WAIT";
+    return {
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: getRisk(prob),
+      label: action === "BUY" ? "BUY HIGHER" : action === "AVOID" ? "AVOID" : "WAIT",
+      reason: `${prob}% up-moves. Auto-barrier set +${barrierAmt} above current price (0.5σ). ${prob >= 55 ? "Price trending higher." : "No clear upward push."}`,
+      entry: prob >= 55 ? `Buy HIGHER. Price likely to exceed barrier by +${barrierAmt}.` : "Insufficient upward momentum for HIGHER trade.",
+      contractType: "Higher (Call+barrier)",
+    };
+  }
+
+  if (type === "lower") {
+    if (!ps) return waitAdvice("Lower (Put+barrier)");
+    const prob = 100 - ps.upPct;
+    const barrierAmt = (ps.stdDev * 0.5).toFixed(5);
+    const action: TradeAdvice["action"] = prob >= 55 ? "BUY" : prob <= 45 ? "AVOID" : "WAIT";
+    return {
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: getRisk(prob),
+      label: action === "BUY" ? "BUY LOWER" : action === "AVOID" ? "AVOID" : "WAIT",
+      reason: `${prob}% down-moves. Auto-barrier set -${barrierAmt} below current price (0.5σ). ${prob >= 55 ? "Price trending lower." : "No clear downward push."}`,
+      entry: prob >= 55 ? `Buy LOWER. Price likely to fall below barrier by -${barrierAmt}.` : "Insufficient downward momentum for LOWER trade.",
+      contractType: "Lower (Put+barrier)",
+    };
+  }
+
+  // ── TOUCH / NO TOUCH ──────────────────────────────────────────────────────
+  if (type === "touch") {
+    if (!ps) return waitAdvice("Touch");
+    const volatilityScore = Math.min(90, Math.round(50 + (ps.avgMove - 0.02) / 0.02 * 25));
+    const prob = Math.max(30, volatilityScore);
+    const action: TradeAdvice["action"] = prob >= 60 ? "BUY" : prob <= 45 ? "AVOID" : "WAIT";
+    return {
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: getRisk(prob),
+      label: action === "BUY" ? "BUY TOUCH" : action === "AVOID" ? "AVOID" : "WAIT",
+      reason: `Avg tick movement: ${ps.avgMove.toFixed(3)}% per tick. Barrier auto-set at ±1.5σ from current price. ${prob >= 60 ? "High volatility — likely to touch barrier." : "Low volatility — price may not reach barrier."}`,
+      entry: prob >= 60 ? `Buy TOUCH. Price volatility (${ps.avgMove.toFixed(3)}%/tick) favours barrier contact.` : "Volatility too low for reliable TOUCH. Consider NO TOUCH instead.",
+      contractType: "Touch (One Touch)",
+    };
+  }
+
+  if (type === "no_touch") {
+    if (!ps) return waitAdvice("No Touch");
+    const volatilityScore = Math.min(90, Math.round(50 + (ps.avgMove - 0.02) / 0.02 * 25));
+    const touchProb = Math.max(30, volatilityScore);
+    const prob = 100 - touchProb;
+    const action: TradeAdvice["action"] = prob >= 58 ? "BUY" : prob <= 42 ? "AVOID" : "WAIT";
+    return {
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: getRisk(prob),
+      label: action === "BUY" ? "BUY NO TOUCH" : action === "AVOID" ? "AVOID" : "WAIT",
+      reason: `Avg tick movement: ${ps.avgMove.toFixed(3)}%/tick (low = good for NO TOUCH). Barrier at ±1.5σ. ${prob >= 58 ? "Low volatility — price unlikely to reach barrier." : "Volatility too high — barrier may be hit."}`,
+      entry: prob >= 58 ? `Buy NO TOUCH. Low price volatility (${ps.avgMove.toFixed(3)}%/tick) favours staying in range.` : "Volatility too high for NO TOUCH. Consider TOUCH instead.",
+      contractType: "No Touch",
+    };
+  }
+
+  // ── ENDS IN / ENDS OUT ────────────────────────────────────────────────────
+  if (type === "ends_in") {
+    if (!ps) return waitAdvice("Ends In");
+    const rangeScore = Math.min(90, Math.round(50 + (0.03 - ps.avgMove) / 0.02 * 25));
+    const prob = Math.max(30, rangeScore);
+    const action: TradeAdvice["action"] = prob >= 58 ? "BUY" : prob <= 42 ? "AVOID" : "WAIT";
+    return {
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: getRisk(prob),
+      label: action === "BUY" ? "BUY ENDS IN" : action === "AVOID" ? "AVOID" : "WAIT",
+      reason: `Price moves ${ps.avgMove.toFixed(3)}%/tick avg. Range barriers at ±1.5σ. ${prob >= 58 ? "Price is contained — likely to expire within range." : "Volatility too high — price may escape the range."}`,
+      entry: prob >= 58 ? `Buy ENDS IN (Stays Between). Price movement is contained at ${ps.avgMove.toFixed(3)}%/tick.` : "Price too volatile for ENDS IN. Consider ENDS OUT.",
+      contractType: "Ends In (Range)",
+    };
+  }
+
+  if (type === "ends_out") {
+    if (!ps) return waitAdvice("Ends Out");
+    const rangeScore = Math.min(90, Math.round(50 + (0.03 - ps.avgMove) / 0.02 * 25));
+    const inProb = Math.max(30, rangeScore);
+    const prob = 100 - inProb;
+    const action: TradeAdvice["action"] = prob >= 55 ? "BUY" : prob <= 45 ? "AVOID" : "WAIT";
+    return {
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: getRisk(prob),
+      label: action === "BUY" ? "BUY ENDS OUT" : action === "AVOID" ? "AVOID" : "WAIT",
+      reason: `High price movement at ${ps.avgMove.toFixed(3)}%/tick avg. ${prob >= 55 ? "Volatile conditions — price likely to break outside the range." : "Price is relatively contained — poor conditions for ENDS OUT."}`,
+      entry: prob >= 55 ? `Buy ENDS OUT (Goes Outside). Price movement is wide enough to break the range.` : "Price too stable for ENDS OUT. Wait for more volatility.",
+      contractType: "Ends Out (Goes Outside)",
+    };
+  }
+
+  // ── MULTIPLIERS ───────────────────────────────────────────────────────────
+  if (type === "multiplier_up") {
+    if (!ps) return waitAdvice("Multiplier Up");
+    const streak = Math.max(0, ps.streak);
+    const momentumScore = Math.min(85, 50 + streak * 6 + (ps.upPct - 50));
+    const prob = Math.max(30, Math.round(momentumScore));
+    const action: TradeAdvice["action"] = prob >= 62 ? "BUY" : prob <= 45 ? "AVOID" : "WAIT";
+    return {
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: prob >= 62 ? "Low" : "High",
+      label: action === "BUY" ? "BUY MULT UP" : action === "AVOID" ? "AVOID" : "WAIT",
+      reason: `${streak} consecutive up-moves. ${ps.upPct}% of recent ticks were up. ${prob >= 62 ? "Strong upward momentum — good for leveraged UP position." : "Momentum not strong enough for a multiplier trade."}`,
+      entry: prob >= 62 ? `Buy MULTIPLIER UP. Strong upward streak (${streak} in a row, ${ps.upPct}% up-moves). Use with stop loss.` : "Momentum not confirmed. Wait for a stronger streak.",
+      contractType: "Multiplier Up",
+    };
+  }
+
+  if (type === "multiplier_down") {
+    if (!ps) return waitAdvice("Multiplier Down");
+    const downStreak = Math.max(0, -ps.streak);
+    const momentumScore = Math.min(85, 50 + downStreak * 6 + (50 - ps.upPct));
+    const prob = Math.max(30, Math.round(momentumScore));
+    const action: TradeAdvice["action"] = prob >= 62 ? "BUY" : prob <= 45 ? "AVOID" : "WAIT";
+    return {
+      action, probability: prob, confidence: getConfidenceLabel(prob), risk: prob >= 62 ? "Low" : "High",
+      label: action === "BUY" ? "BUY MULT DOWN" : action === "AVOID" ? "AVOID" : "WAIT",
+      reason: `${downStreak} consecutive down-moves. ${100 - ps.upPct}% of recent ticks were down. ${prob >= 62 ? "Strong downward momentum — good for leveraged DOWN position." : "Momentum not strong enough for a multiplier trade."}`,
+      entry: prob >= 62 ? `Buy MULTIPLIER DOWN. Strong downward streak (${downStreak} in a row). Use with stop loss.` : "Momentum not confirmed. Wait for a stronger streak.",
+      contractType: "Multiplier Down",
+    };
+  }
+
+  return waitAdvice(type);
 }
 
-export function useTickAnalysis(
-  ticks: Tick[],
-  analysisType: AnalysisType = "even",
-  barrier: number = 4
-) {
+function waitAdvice(contractType: string): TradeAdvice {
+  return { action: "WAIT", label: "WAIT", probability: 0, confidence: "LOW", reason: "Collecting data...", entry: "", risk: "High", contractType };
+}
+
+// ── Public hook ───────────────────────────────────────────────────────────────
+export function useTickAnalysis(ticks: Tick[], analysisType: AnalysisType = "even", barrier: number = 4) {
   return useMemo(() => {
     const sample50 = ticks.slice(0, 50);
-    const sample100 = ticks.slice(0, 100);
     const n50 = sample50.length;
-    const n100 = sample100.length;
 
     const evenCount = sample50.filter(t => t.lastDigit % 2 === 0).length;
-    const oddCount = n50 - evenCount;
     const evenPercent = Math.round((evenCount / Math.max(1, n50)) * 100);
     const oddPercent = 100 - evenPercent;
 
     const overCount = sample50.filter(t => t.lastDigit > 4).length;
-    const underCount = n50 - overCount;
     const overPercent = Math.round((overCount / Math.max(1, n50)) * 100);
     const underPercent = 100 - overPercent;
 
     const frequencies = Array(10).fill(0);
-    sample100.forEach(t => frequencies[t.lastDigit]++);
+    ticks.slice(0, 100).forEach(t => frequencies[t.lastDigit]++);
     const maxFreq = Math.max(...frequencies);
     const minFreq = Math.min(...frequencies);
     const hotDigit = frequencies.indexOf(maxFreq);
     const coldDigit = frequencies.indexOf(minFreq);
 
     const last5 = ticks.slice(0, 5);
-    const trendDirection =
-      last5.length >= 2 && last5[0].quote > last5[last5.length - 1].quote
-        ? "UPTREND"
-        : "DOWNTREND";
+    const trendDirection = last5.length >= 2 && last5[0].quote > last5[last5.length - 1].quote ? "UPTREND" : "DOWNTREND";
 
     const advice = generateAdvice(analysisType, barrier, ticks);
-    const confidence = Math.min(95, maxFreq > 0 ? maxFreq * (100 / Math.max(n100, 1)) * 3 : 0);
+    const confidence = Math.min(95, maxFreq > 0 ? maxFreq * (100 / Math.max(n50, 1)) * 3 : 0);
 
     return {
-      evenPercent,
-      oddPercent,
-      overPercent,
-      underPercent,
-      frequencies,
-      hotDigit,
-      coldDigit,
+      evenPercent, oddPercent, overPercent, underPercent, frequencies,
+      hotDigit, coldDigit,
       confidence: Math.round(Math.min(95, confidence)),
-      trendDirection,
-      advice,
-      n50,
-      n100,
+      trendDirection, advice, n50, n100: ticks.slice(0, 100).length,
     };
   }, [ticks, analysisType, barrier]);
 }
 
-export const ANALYSIS_TYPES: { type: AnalysisType; label: string; hasBarrier: boolean; barrierLabel: string }[] = [
-  { type: "even",    label: "Even",    hasBarrier: false, barrierLabel: "" },
-  { type: "odd",     label: "Odd",     hasBarrier: false, barrierLabel: "" },
-  { type: "over",    label: "Over",    hasBarrier: true,  barrierLabel: "Barrier" },
-  { type: "under",   label: "Under",   hasBarrier: true,  barrierLabel: "Barrier" },
-  { type: "matches", label: "Matches", hasBarrier: true,  barrierLabel: "Digit" },
-  { type: "differs", label: "Differs", hasBarrier: true,  barrierLabel: "Digit" },
+// ── Type metadata ─────────────────────────────────────────────────────────────
+export const ANALYSIS_TYPES: {
+  type: AnalysisType;
+  label: string;
+  category: TradeCategory;
+  hasBarrier: boolean;
+  barrierLabel: string;
+}[] = [
+  { type: "even",          label: "Even",       category: "digits",      hasBarrier: false, barrierLabel: "" },
+  { type: "odd",           label: "Odd",        category: "digits",      hasBarrier: false, barrierLabel: "" },
+  { type: "over",          label: "Over",       category: "digits",      hasBarrier: true,  barrierLabel: "Barrier" },
+  { type: "under",         label: "Under",      category: "digits",      hasBarrier: true,  barrierLabel: "Barrier" },
+  { type: "matches",       label: "Matches",    category: "digits",      hasBarrier: true,  barrierLabel: "Digit" },
+  { type: "differs",       label: "Differs",    category: "digits",      hasBarrier: true,  barrierLabel: "Digit" },
+  { type: "rise",          label: "Rise",       category: "rise_fall",   hasBarrier: false, barrierLabel: "" },
+  { type: "fall",          label: "Fall",       category: "rise_fall",   hasBarrier: false, barrierLabel: "" },
+  { type: "higher",        label: "Higher",     category: "higher_lower",hasBarrier: false, barrierLabel: "" },
+  { type: "lower",         label: "Lower",      category: "higher_lower",hasBarrier: false, barrierLabel: "" },
+  { type: "touch",         label: "Touch",      category: "touch",       hasBarrier: false, barrierLabel: "" },
+  { type: "no_touch",      label: "No Touch",   category: "touch",       hasBarrier: false, barrierLabel: "" },
+  { type: "ends_in",       label: "Ends In",    category: "ends",        hasBarrier: false, barrierLabel: "" },
+  { type: "ends_out",      label: "Ends Out",   category: "ends",        hasBarrier: false, barrierLabel: "" },
+  { type: "multiplier_up", label: "Mult Up",    category: "multipliers", hasBarrier: false, barrierLabel: "" },
+  { type: "multiplier_down",label: "Mult Down", category: "multipliers", hasBarrier: false, barrierLabel: "" },
+];
+
+export const TRADE_CATEGORIES: { id: TradeCategory; label: string; desc: string }[] = [
+  { id: "digits",       label: "Digits",        desc: "Even, Odd, Over, Under, Matches, Differs" },
+  { id: "rise_fall",    label: "Rise / Fall",   desc: "Predict if price rises or falls" },
+  { id: "higher_lower", label: "Higher / Lower",desc: "Price vs auto-set barrier level" },
+  { id: "touch",        label: "Touch",         desc: "Price touches a barrier or not" },
+  { id: "ends",         label: "Ends In / Out", desc: "Price ends within or outside range" },
+  { id: "multipliers",  label: "Multipliers",   desc: "Leveraged directional trades" },
 ];
 
 export function generateAllTypeAdvice(ticks: Tick[], hotDigit: number) {
   return ANALYSIS_TYPES.map(at => {
-    const barrier = at.hasBarrier ? (at.type === "matches" || at.type === "differs" ? hotDigit : 4) : 4;
-    const advice = generateAdvice(at.type, barrier, ticks);
-    return { type: at.type, label: at.label, advice };
+    const autoBarrier = at.hasBarrier
+      ? (at.type === "matches" || at.type === "differs" ? hotDigit : 4)
+      : 4;
+    const advice = generateAdvice(at.type, autoBarrier, ticks);
+    return { type: at.type, label: at.label, category: at.category, advice, autoBarrier };
   });
 }
 
@@ -260,8 +410,7 @@ export function getMultiMarketAdvice(
   return Object.entries(tickMap)
     .map(([symbol, ticks]) => {
       const advice = generateAdvice(analysisType, barrier, ticks);
-      const market = symbol;
-      return { symbol, market, ticks: ticks.length, advice };
+      return { symbol, market: symbol, ticks: ticks.length, advice };
     })
     .sort((a, b) => {
       if (a.advice.action === "BUY" && b.advice.action !== "BUY") return -1;
