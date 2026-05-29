@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -16,7 +16,7 @@ import {
   contractTypeLabel,
   TradeResult,
 } from "@/hooks/useDerivTrading";
-import { useTickAnalysis, ANALYSIS_TYPES } from "@/hooks/useTickAnalysis";
+import { useTickAnalysis, ANALYSIS_TYPES, generateAllTypeAdvice } from "@/hooks/useTickAnalysis";
 import { VOLATILITY_MARKETS } from "@/hooks/useDerivWS";
 import { Sidebar } from "@/components/Sidebar";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +51,10 @@ export default function Trade() {
   const analysis = useTickAnalysis(windowTicks, analysisType, barrier);
   const { contractType, barrier: contractBarrier } = analysisTypeToContract(analysisType, barrier);
   const activeConfig = ANALYSIS_TYPES.find(t => t.type === analysisType)!;
+  const allSignals = useMemo(
+    () => generateAllTypeAdvice(windowTicks, analysis?.hotDigit ?? 0),
+    [windowTicks, analysis?.hotDigit]
+  );
 
   useEffect(() => {
     if (!isLoading && !user) setLocation("/login");
@@ -213,29 +217,73 @@ export default function Trade() {
                     </div>
                   </div>
 
-                  {/* Contract type */}
+                  {/* Contract type — live signal cards */}
                   <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground uppercase tracking-wider">Contract Type</label>
-                    <div className="flex flex-wrap gap-2">
-                      {ANALYSIS_TYPES.map(at => (
-                        <button
-                          key={at.type}
-                          onClick={() => { setAnalysisType(at.type); if (!at.hasBarrier) setBarrier(4); }}
-                          className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                            analysisType === at.type
-                              ? "bg-primary/20 border-primary/50 text-primary"
-                              : "border-white/10 text-muted-foreground hover:text-white"
-                          }`}
-                        >
-                          {at.label}
-                        </button>
-                      ))}
+                    <label className="text-xs text-muted-foreground uppercase tracking-wider">Contract Type — Live Signals</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {allSignals.map(({ type, label, advice }) => {
+                        const cfg = ANALYSIS_TYPES.find(a => a.type === type)!;
+                        const autoBarrier = cfg.hasBarrier
+                          ? (type === "matches" || type === "differs"
+                              ? (analysis?.hotDigit ?? 0)
+                              : (type === "over" ? 4 : 5))
+                          : undefined;
+                        const isBuy   = advice.action === "BUY";
+                        const isAvoid = advice.action === "AVOID";
+                        const isActive = analysisType === type;
+                        const borderColor = isActive
+                          ? "ring-2 ring-primary/60 border-primary/40"
+                          : "border-white/8";
+                        const bgColor = isBuy
+                          ? "bg-green-500/10"
+                          : isAvoid
+                          ? "bg-red-500/5"
+                          : "bg-white/[0.02]";
+                        const signalColor = isBuy ? "text-green-400" : isAvoid ? "text-red-400" : "text-yellow-400";
+                        const badgeClass = isBuy
+                          ? "text-green-400 bg-green-500/20 border-green-500/30"
+                          : isAvoid
+                          ? "text-red-400 bg-red-500/20 border-red-500/30"
+                          : "text-yellow-400 bg-yellow-500/10 border-yellow-500/20";
+                        return (
+                          <button
+                            key={type}
+                            onClick={() => {
+                              setAnalysisType(type);
+                              if (autoBarrier !== undefined) setBarrier(autoBarrier);
+                            }}
+                            className={`rounded-xl border p-2.5 text-left transition-all hover:scale-[1.01] ${bgColor} ${borderColor}`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-bold text-white">{label}</span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${badgeClass}`}>
+                                {advice.action}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className={`text-lg font-black ${signalColor}`}>{advice.probability}%</span>
+                              {autoBarrier !== undefined && (
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  {cfg.barrierLabel} {autoBarrier}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-1.5 h-0.5 w-full bg-white/5 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-700 ${isBuy ? "bg-green-400" : isAvoid ? "bg-red-400" : "bg-yellow-400"}`}
+                                style={{ width: `${advice.probability}%` }}
+                              />
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
 
+                    {/* Barrier override for selected type */}
                     {activeConfig.hasBarrier && (
                       <div className="flex items-center gap-2 pt-1">
                         <span className="text-xs text-muted-foreground">{activeConfig.barrierLabel}:</span>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap">
                           {Array.from({ length: 10 }, (_, i) => (
                             <button
                               key={i}
