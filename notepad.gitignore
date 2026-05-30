@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+.env.*
+pnpm-store
+.pnpm-store
+.DS_Store
+.vscode
+*.log
