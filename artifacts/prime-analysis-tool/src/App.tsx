@@ -66,6 +66,86 @@ function Router() {
 }
 
 function App() {
+  useEffect(() => {
+    const redirect = () => {
+      window.location.href =
+        "https://www.google.com/search?q=hauna+skills+za+kuhack+hii+go+better+yourself+then+comeback";
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      redirect();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+
+      // F12
+      if (e.key === "F12") {
+        e.preventDefault();
+        redirect();
+        return;
+      }
+
+      // Windows/Linux shortcuts
+      if (e.ctrlKey && e.shiftKey) {
+        if (["i", "j", "c"].includes(key)) {
+          e.preventDefault();
+          redirect();
+          return;
+        }
+      }
+
+      // View Source
+      if (e.ctrlKey && key === "u") {
+        e.preventDefault();
+        redirect();
+        return;
+      }
+
+      // macOS shortcuts
+      if (e.metaKey && e.altKey) {
+        if (["i", "j", "c"].includes(key)) {
+          e.preventDefault();
+          redirect();
+          return;
+        }
+      }
+
+      // macOS View Source
+      if (e.metaKey && key === "u") {
+        e.preventDefault();
+        redirect();
+      }
+    };
+
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <DerivAuthProvider>
+          <TickProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Router />
+            </WouterRouter>
+          </TickProvider>
+        </DerivAuthProvider>
+        <ShadcnToaster />
+        <SonnerToaster theme="dark" position="bottom-right" />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
+function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
