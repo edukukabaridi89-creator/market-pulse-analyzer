@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 
 const users = [
-  { username: "demo", password: "demo123", device: null },
-  { username: "user1", password: "pass123", device: null },
-  { username: "user2", password: "pass4479", device: null },
-  { username: "user3", password: "pass789", device: null },
-  { username: "user4", password: "pass321", device: null },
-  { username: "user5", password: "pass654", device: null },
-  { username: "unknownmentor", password: "unknownmentor1", device: null },
+  { username: "123demo", password: "demo123", device: null },
+  { username: "user12", password: "pass123", device: null },
+  { username: "user23", password: "pass4479", device: null },
+  { username: "user34", password: "pass6789", device: null },
+  { username: "user45", password: "pass321", device: null },
+  { username: "user56", password: "pass6543", device: null },
+  { username: "1unknownmentor1", password: "1unknownmentor1", device: null },
 ];
 
 export function useAuth() {
