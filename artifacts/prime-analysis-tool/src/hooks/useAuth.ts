@@ -173,26 +173,36 @@ export function useAuth() {
       // ── Build device fingerprint ──
       const currentDevice = await buildDeviceFingerprint();
 
-      // ── Load persisted user bindings ──
-      let persistedUsers: typeof users = [];
+      // ── Load persisted device bindings ──
+      // We always use the canonical `users` array as the source of truth for
+      // which accounts exist, and only read device bindings from storage.
+      // This prevents "user not found" when storage is stale or partial.
+      const deviceBindings: Record<string, string | null> = {};
       try {
-        const stored = localStorage.getItem("prime_users_v2");
-        if (stored) {
-          persistedUsers = JSON.parse(stored);
-        } else {
-          // Migrate from old key or start fresh
-          const oldStored = localStorage.getItem("prime_users");
-          persistedUsers = oldStored ? JSON.parse(oldStored) : [...users];
-          localStorage.setItem("prime_users_v2", JSON.stringify(persistedUsers));
+        const sources = ["prime_users_v2", "prime_users"];
+        for (const key of sources) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed: { username: string; device: string | null }[] = JSON.parse(raw);
+            parsed.forEach(u => {
+              if (u.username && !(u.username in deviceBindings)) {
+                deviceBindings[u.username] = u.device ?? null;
+              }
+            });
+            break;
+          }
         }
-      } catch (_) {
-        persistedUsers = [...users];
-      }
+      } catch (_) { /* ignore, bindings stay empty */ }
 
-      const dbUser = persistedUsers.find(u => u.username === username);
-      if (!dbUser) {
-        return resolve({ success: false, message: "User record not found." });
-      }
+      // Rebuild from the canonical list, preserving any stored device binding
+      const persistedUsers = users.map(u => ({
+        ...u,
+        device: (u.username in deviceBindings ? deviceBindings[u.username] : null) as string | null,
+      }));
+
+      const dbUser = persistedUsers.find(u => u.username === username)!;
+      // dbUser is guaranteed to exist because matchedUser already confirmed the
+      // username is in the canonical `users` array.
 
       // ── Device binding check ──
       if (dbUser.device === null) {
