@@ -323,7 +323,7 @@ export default function Landing() {
         <div className="relative z-10 max-w-2xl space-y-6">
           <ShieldAlert className="w-12 h-12 text-primary mx-auto opacity-80" />
           <h2 className="text-4xl font-bold text-white">Ready to Trade Smarter?</h2>
-          <p className="text-lg text-muted-foreground">Lifetime access. One-time payment of $200. Unparalleled market vision.</p>
+          <p className="text-lg text-muted-foreground">Lifetime access. One-time payment of $100. Unparalleled market vision.</p>
           <Link href="/signup">
             <Button size="lg" className="mt-4 bg-gradient-to-r from-primary to-[#0055ff] border-none text-white h-14 px-10 shadow-[0_0_30px_rgba(0,198,255,0.3)] hover:opacity-90">
               Proceed to Tool — $100

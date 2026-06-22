@@ -22,7 +22,7 @@ export default function Signup() {
             </span>
             <div className="flex items-center justify-center gap-1">
               <span className="text-3xl font-bold text-muted-foreground">$</span>
-              <span className="text-6xl font-black text-white tracking-tighter">200</span>
+              <span className="text-6xl font-black text-white tracking-tighter">100</span>
             </div>
             <p className="text-muted-foreground mt-2 text-sm">One-time payment. No recurring fees.</p>
           </div>

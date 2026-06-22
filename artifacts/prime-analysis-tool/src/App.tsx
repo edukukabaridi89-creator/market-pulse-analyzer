@@ -15,8 +15,9 @@ import History from "@/pages/History";
 import Settings from "@/pages/Settings";
 import Trade from "@/pages/Trade";
 
-import { TickProvider } from "@/contexts/TickContext";
+import { TickProvider, useTick } from "@/contexts/TickContext";
 import { DerivAuthProvider, extractOAuthTokens, TOKEN_STORAGE_KEY } from "@/contexts/DerivAuthContext";
+import { AlertSystem } from "@/components/AlertSystem";
 
 const queryClient = new QueryClient();
 
@@ -65,6 +66,19 @@ function Router() {
   );
 }
 
+// Global alert system reads from TickContext — must be inside TickProvider
+function GlobalAlerts() {
+  const { tickMap, allMarketsMode, analysisType, barrier } = useTick();
+  return (
+    <AlertSystem
+      tickMap={tickMap}
+      analysisType={analysisType}
+      barrier={barrier}
+      enabled={allMarketsMode && Object.keys(tickMap).length > 0}
+    />
+  );
+}
+
 function App() {
   useEffect(() => {
     const redirect = () => {
@@ -80,14 +94,12 @@ function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
 
-      // F12
       if (e.key === "F12") {
         e.preventDefault();
         redirect();
         return;
       }
 
-      // Windows/Linux shortcuts
       if (e.ctrlKey && e.shiftKey) {
         if (["i", "j", "c"].includes(key)) {
           e.preventDefault();
@@ -96,14 +108,12 @@ function App() {
         }
       }
 
-      // View Source
       if (e.ctrlKey && key === "u") {
         e.preventDefault();
         redirect();
         return;
       }
 
-      // macOS shortcuts
       if (e.metaKey && e.altKey) {
         if (["i", "j", "c"].includes(key)) {
           e.preventDefault();
@@ -112,7 +122,6 @@ function App() {
         }
       }
 
-      // macOS View Source
       if (e.metaKey && key === "u") {
         e.preventDefault();
         redirect();
@@ -136,24 +145,7 @@ function App() {
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
               <Router />
             </WouterRouter>
-          </TickProvider>
-        </DerivAuthProvider>
-        <ShadcnToaster />
-        <SonnerToaster theme="dark" position="bottom-right" />
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
-}
-
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <DerivAuthProvider>
-          <TickProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
+            <GlobalAlerts />
           </TickProvider>
         </DerivAuthProvider>
         <ShadcnToaster />
