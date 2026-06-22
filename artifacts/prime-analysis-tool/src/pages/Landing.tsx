@@ -108,7 +108,7 @@ export default function Landing() {
           </Link>
           <Link href="/signup">
             <Button className="bg-gradient-to-r from-[#00c6ff] to-[#0072ff] hover:opacity-90 shadow-[0_0_15px_rgba(0,198,255,0.4)] border-none">
-              Get Access — $200
+              Get Access — $100
             </Button>
           </Link>
         </div>
@@ -144,7 +144,7 @@ export default function Landing() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <Link href="/signup">
               <Button size="lg" className="h-14 px-8 text-base bg-white text-black hover:bg-gray-200 border-none">
-                Get Lifetime Access — $200
+                Get Lifetime Access — $100
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </Link>
@@ -247,7 +247,7 @@ export default function Landing() {
                 LIFETIME ACCESS
               </div>
               <div className="flex items-end justify-center gap-2 mb-6">
-                <span className="text-6xl font-black text-white">$200</span>
+                <span className="text-6xl font-black text-white">$100</span>
                 <span className="text-muted-foreground mb-2">one-time</span>
               </div>
               <ul className="space-y-3 text-sm text-left mb-8">
@@ -268,7 +268,7 @@ export default function Landing() {
               </ul>
               <Link href="/signup">
                 <Button size="lg" className="w-full h-14 text-base bg-gradient-to-r from-primary to-[#0055ff] border-none text-white shadow-[0_0_30px_rgba(0,198,255,0.3)] hover:opacity-90">
-                  Proceed to Tool — $200
+                  Proceed to Tool — $100
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
@@ -326,7 +326,7 @@ export default function Landing() {
           <p className="text-lg text-muted-foreground">Lifetime access. One-time payment of $200. Unparalleled market vision.</p>
           <Link href="/signup">
             <Button size="lg" className="mt-4 bg-gradient-to-r from-primary to-[#0055ff] border-none text-white h-14 px-10 shadow-[0_0_30px_rgba(0,198,255,0.3)] hover:opacity-90">
-              Proceed to Tool — $200
+              Proceed to Tool — $100
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
           </Link>
