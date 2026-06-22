@@ -83,7 +83,7 @@ function App() {
   useEffect(() => {
     const redirect = () => {
       window.location.href =
-        "https://www.google.com/search?q=hauna+skills+za+kuhack+hii+go+better+yourself+then+comeback";
+        "https://www.google.com/search?q=hauna+skills+za+kuhack+hii,+hata+Mr+Duke+hawezi,+go+better+yourself+then+comeback";
     };
 
     const handleContextMenu = (e: MouseEvent) => {
