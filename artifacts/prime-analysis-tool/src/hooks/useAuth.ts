@@ -9,6 +9,7 @@ const users = [
   { username: "user45", password: "pass321", device: null },
   { username: "user56", password: "pass6543", device: null },
   { username: "lonchezz", password: "lonchezz254", device: null },
+  { username: "Justin", password: "Justin641", device: null },
   { username: "1unknownmentor1", password: "1unknownmentor1", device: null },
 ];
 
