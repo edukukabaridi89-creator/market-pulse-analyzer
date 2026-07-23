@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 
 const users = [
   { username: "123demo", password: "demo123", device: null },
+  { username: "edwin", password: "edwin", device: null },
   { username: "user12", password: "pass123", device: null },
   { username: "user23", password: "pass4479", device: null },
   { username: "user34", password: "pass6789", device: null },
