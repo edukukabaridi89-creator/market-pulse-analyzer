@@ -71,10 +71,14 @@ export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
         const data = JSON.parse(event.data);
         if (data.pong) return;
 
-        // If Deriv sends an error (e.g. RateLimit, InvalidToken), reconnect
+        // If Deriv sends an error, handle based on whether it's recoverable
         if (data.error) {
-          console.warn("[DerivWS] error from Deriv:", data.error.code, data.error.message);
-          ws.close(); // triggers onclose → reconnect after 3 s
+          const code = data.error.code;
+          console.warn("[DerivWS] error from Deriv:", code, data.error.message);
+          // Permanent errors: reconnecting won't help — just log and stop
+          if (code === "InvalidSymbol" || code === "InputValidationFailed") return;
+          // Transient errors (RateLimit, etc.): close so onclose triggers a reconnect
+          ws.close();
           return;
         }
 

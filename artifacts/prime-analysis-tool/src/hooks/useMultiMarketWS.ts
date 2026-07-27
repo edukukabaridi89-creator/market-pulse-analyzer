@@ -53,10 +53,14 @@ export function useMultiMarketWS(enabled: boolean) {
         const data = JSON.parse(event.data);
         if (data.pong) return;
 
-        // If Deriv sends an error (e.g. RateLimit), reconnect
+        // If Deriv sends an error, handle based on whether it's recoverable
         if (data.error) {
-          console.warn("[MultiMarketWS] error from Deriv:", data.error.code, data.error.message);
-          ws.close(); // triggers onclose → reconnect after 3 s
+          const code = data.error.code;
+          console.warn("[MultiMarketWS] error from Deriv:", code, data.error.message);
+          // Permanent errors: reconnecting won't help — skip this symbol's subscription
+          if (code === "InvalidSymbol" || code === "InputValidationFailed") return;
+          // Transient errors (RateLimit, etc.): close so onclose triggers a reconnect
+          ws.close();
           return;
         }
 
