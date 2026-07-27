@@ -49,7 +49,8 @@ export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
     }
 
     try {
-      const ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
+      const appId = import.meta.env.VITE_DERIV_APP_ID || "1089";
+      const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
       wsRef.current = ws;
 
       // Keep-alive: Deriv drops idle connections after ~60 s without a ping

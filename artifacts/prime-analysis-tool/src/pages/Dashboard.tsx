@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity, Volume2, VolumeX, TrendingUp, TrendingDown,
   BarChart2, Layers, ChevronDown, ShoppingCart, X, Wallet, ExternalLink, Loader2,
 } from "lucide-react";
 
-import { useAuth } from "@/hooks/useAuth";
 import { useTick } from "@/contexts/TickContext";
 import { useTickAnalysis, ANALYSIS_TYPES, TRADE_CATEGORIES, getMultiMarketAdvice, generateAllTypeAdvice } from "@/hooks/useTickAnalysis";
 import { VOLATILITY_MARKETS } from "@/hooks/useDerivWS";
@@ -34,8 +32,6 @@ interface QuickBuyTarget {
 }
 
 export default function Dashboard() {
-  const [, setLocation] = useLocation();
-  const { user, isLoading } = useAuth();
   const {
     ticks, isConnected, market, setMarket,
     allMarketsMode, setAllMarketsMode,
@@ -90,10 +86,6 @@ export default function Dashboard() {
   const isConnectedAll = allMarketsMode ? multiConnected : isConnected;
 
   useEffect(() => {
-    if (!isLoading && !user) setLocation("/login");
-  }, [user, isLoading, setLocation]);
-
-  useEffect(() => {
     if (!soundEnabled || ticks.length === 0) return;
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -111,17 +103,6 @@ export default function Dashboard() {
     osc.start();
     osc.stop(ctx.currentTime + 0.08);
   }, [ticks, soundEnabled]);
-
-  if (isLoading || !user) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Activity className="w-8 h-8 text-primary animate-pulse" />
-          <span className="text-muted-foreground font-mono text-sm uppercase tracking-widest">Initializing Terminal...</span>
-        </div>
-      </div>
-    );
-  }
 
   const latestTick = ticks[0] || null;
 
