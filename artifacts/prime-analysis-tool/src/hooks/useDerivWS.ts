@@ -52,21 +52,30 @@ export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
       const ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
       wsRef.current = ws;
 
+      // Keep-alive: Deriv drops idle connections after ~60 s without a ping
+      let pingInterval: ReturnType<typeof setInterval> | null = null;
+
       ws.onopen = () => {
         if (!isComponentMounted.current) return;
         setIsConnected(true);
         toast.success(`Connected — ${VOLATILITY_MARKETS.find(m => m.symbol === symbol)?.name || symbol}`);
         ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
+        pingInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }));
+        }, 30_000);
       };
 
       ws.onmessage = (event) => {
         if (!isComponentMounted.current) return;
         const data = JSON.parse(event.data);
-        if (data.error) return;
+        if (data.error || data.pong) return;
 
         if (data.tick) {
-          const { quote, epoch } = data.tick;
-          const lastDigit = Math.floor(quote * 100) % 10;
+          const { quote, epoch, pip_size } = data.tick;
+          // Use string formatting to avoid floating-point rounding errors
+          // (e.g. Math.floor(5234.19 * 100) === 523418, not 523419)
+          const decimals = typeof pip_size === "number" ? pip_size : 2;
+          const lastDigit = parseInt(quote.toFixed(decimals).slice(-1), 10);
           setTicks(prev => {
             const newTick: Tick = { quote, epoch, lastDigit, symbol };
             const next = [newTick, ...prev];
@@ -77,6 +86,7 @@ export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
       };
 
       ws.onclose = () => {
+        if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
         if (!isComponentMounted.current) return;
         setIsConnected(false);
         toast.error("Reconnecting...");

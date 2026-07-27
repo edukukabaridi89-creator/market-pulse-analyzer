@@ -27,6 +27,9 @@ export function useMultiMarketWS(enabled: boolean) {
       const ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
       wsRef.current = ws;
 
+      // Keep-alive: Deriv drops idle connections after ~60 s without a ping
+      let pingInterval: ReturnType<typeof setInterval> | null = null;
+
       ws.onopen = () => {
         if (!mountedRef.current) return;
         setIsConnected(true);
@@ -34,15 +37,20 @@ export function useMultiMarketWS(enabled: boolean) {
         ALL_SYMBOLS.forEach(symbol => {
           ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
         });
+        pingInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }));
+        }, 30_000);
       };
 
       ws.onmessage = (event) => {
         if (!mountedRef.current) return;
         const data = JSON.parse(event.data);
-        if (data.error || !data.tick) return;
+        if (data.error || data.pong || !data.tick) return;
 
-        const { quote, epoch, symbol } = data.tick;
-        const lastDigit = Math.floor(quote * 100) % 10;
+        const { quote, epoch, symbol, pip_size } = data.tick;
+        // Use string formatting to avoid floating-point rounding errors
+        const decimals = typeof pip_size === "number" ? pip_size : 2;
+        const lastDigit = parseInt(quote.toFixed(decimals).slice(-1), 10);
         const newTick: Tick = { quote, epoch, lastDigit, symbol };
 
         setTickMap(prev => {
@@ -54,6 +62,7 @@ export function useMultiMarketWS(enabled: boolean) {
       };
 
       ws.onclose = () => {
+        if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
         if (!mountedRef.current) return;
         setIsConnected(false);
         if (enabled) {
