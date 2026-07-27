@@ -34,8 +34,13 @@ export function useMultiMarketWS(enabled: boolean) {
         if (!mountedRef.current) return;
         setIsConnected(true);
         toast.success("Connected — All Markets Mode");
-        ALL_SYMBOLS.forEach(symbol => {
-          ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
+        // Stagger subscription requests: sending all 10 at once triggers Deriv rate-limits
+        ALL_SYMBOLS.forEach((symbol, i) => {
+          setTimeout(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
+            }
+          }, i * 150); // 150 ms gap between each — stays under Deriv's burst limit
         });
         pingInterval = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }));
@@ -45,7 +50,16 @@ export function useMultiMarketWS(enabled: boolean) {
       ws.onmessage = (event) => {
         if (!mountedRef.current) return;
         const data = JSON.parse(event.data);
-        if (data.error || data.pong || !data.tick) return;
+        if (data.pong) return;
+
+        // If Deriv sends an error (e.g. RateLimit), reconnect
+        if (data.error) {
+          console.warn("[MultiMarketWS] error from Deriv:", data.error.code, data.error.message);
+          ws.close(); // triggers onclose → reconnect after 3 s
+          return;
+        }
+
+        if (!data.tick) return;
 
         const { quote, epoch, symbol, pip_size } = data.tick;
         // Use string formatting to avoid floating-point rounding errors

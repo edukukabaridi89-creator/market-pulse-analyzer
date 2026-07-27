@@ -68,7 +68,14 @@ export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
       ws.onmessage = (event) => {
         if (!isComponentMounted.current) return;
         const data = JSON.parse(event.data);
-        if (data.error || data.pong) return;
+        if (data.pong) return;
+
+        // If Deriv sends an error (e.g. RateLimit, InvalidToken), reconnect
+        if (data.error) {
+          console.warn("[DerivWS] error from Deriv:", data.error.code, data.error.message);
+          ws.close(); // triggers onclose → reconnect after 3 s
+          return;
+        }
 
         if (data.tick) {
           const { quote, epoch, pip_size } = data.tick;
