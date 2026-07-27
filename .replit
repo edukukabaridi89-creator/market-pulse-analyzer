@@ -59,7 +59,6 @@ externalPort = 3000
 [userenv]
 
 [userenv.shared]
-VITE_DERIV_APP_ID = "33WEmBCu3VsLSvTvbEQrS"
 
 [nix]
 channel = "stable-25_05"
