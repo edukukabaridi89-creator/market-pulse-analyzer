@@ -21,6 +21,27 @@ export const VOLATILITY_MARKETS = [
   { symbol: "1HZ100V", label: "V100(1s)", name: "Volatility 100 (1s) Index" },
 ];
 
+// Pick the best available symbol from the same volatility family.
+// Prefers exact match, then same number in the other family (R_ ↔ 1HZ),
+// then any available volatility symbol.
+function pickBestSymbol(wanted: string, available: Set<string>): string | null {
+  if (available.has(wanted)) return wanted;
+
+  // Try the 1s-tick counterpart (R_100 ↔ 1HZ100V, R_10 ↔ 1HZ10V …)
+  const numMatch = wanted.match(/(\d+)/);
+  if (numMatch) {
+    const num = numMatch[1];
+    const alt = wanted.startsWith("1HZ") ? `R_${num}` : `1HZ${num}V`;
+    if (available.has(alt)) return alt;
+  }
+
+  // Fall back to any volatility symbol we recognise
+  for (const m of VOLATILITY_MARKETS) {
+    if (available.has(m.symbol)) return m.symbol;
+  }
+  return null;
+}
+
 export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
   const [ticks, setTicks] = useState<Tick[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -49,21 +70,22 @@ export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
     }
 
     try {
-      const appId = import.meta.env.VITE_DERIV_APP_ID || "1089";
+      // 36544 = Deriv API Explorer app — whitelisted for all domains.
+      // Fall back to any user-supplied ID from the environment.
+      const appId = import.meta.env.VITE_DERIV_APP_ID || "36544";
       const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
       wsRef.current = ws;
 
-      // Keep-alive: Deriv drops idle connections after ~60 s without a ping
       let pingInterval: ReturnType<typeof setInterval> | null = null;
 
       ws.onopen = () => {
         if (!isComponentMounted.current) return;
-        setIsConnected(true);
-        toast.success(`Connected — ${VOLATILITY_MARKETS.find(m => m.symbol === symbol)?.name || symbol}`);
-        ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
+        // Keep-alive ping every 30 s
         pingInterval = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }));
         }, 30_000);
+        // Discover available symbols before subscribing
+        ws.send(JSON.stringify({ active_symbols: "brief", product_type: "basic" }));
       };
 
       ws.onmessage = (event) => {
@@ -71,25 +93,42 @@ export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
         const data = JSON.parse(event.data);
         if (data.pong) return;
 
-        // If Deriv sends an error, handle based on whether it's recoverable
+        // ── active_symbols response → subscribe to the best available symbol ──
+        if (data.active_symbols) {
+          const available = new Set<string>(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            data.active_symbols.map((s: any) => s.symbol as string)
+          );
+          const target = pickBestSymbol(symbol, available);
+          if (target) {
+            setIsConnected(true);
+            ws.send(JSON.stringify({ ticks: target, subscribe: 1 }));
+            const name = VOLATILITY_MARKETS.find(m => m.symbol === target)?.name ?? target;
+            toast.success(`Connected — ${name}${target !== symbol ? ` (${symbol} unavailable, using ${target})` : ""}`);
+          } else {
+            console.warn("[DerivWS] No volatility symbols available with this app_id");
+            toast.error("No volatility markets available. Check your app_id.");
+          }
+          return;
+        }
+
+        // ── error handling ──
         if (data.error) {
           const code = data.error.code;
           console.warn("[DerivWS] error from Deriv:", code, data.error.message);
-          // Permanent errors: reconnecting won't help — just log and stop
+          // Transient errors → reconnect; permanent symbol errors → log and skip
           if (code === "InvalidSymbol" || code === "InputValidationFailed") return;
-          // Transient errors (RateLimit, etc.): close so onclose triggers a reconnect
           ws.close();
           return;
         }
 
+        // ── tick data ──
         if (data.tick) {
           const { quote, epoch, pip_size } = data.tick;
-          // Use string formatting to avoid floating-point rounding errors
-          // (e.g. Math.floor(5234.19 * 100) === 523418, not 523419)
           const decimals = typeof pip_size === "number" ? pip_size : 2;
           const lastDigit = parseInt(quote.toFixed(decimals).slice(-1), 10);
           setTicks(prev => {
-            const newTick: Tick = { quote, epoch, lastDigit, symbol };
+            const newTick: Tick = { quote, epoch, lastDigit, symbol: data.tick.symbol ?? symbol };
             const next = [newTick, ...prev];
             if (next.length > 200) next.length = 200;
             return next;
@@ -101,7 +140,6 @@ export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
         if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
         if (!isComponentMounted.current) return;
         setIsConnected(false);
-        toast.error("Reconnecting...");
         reconnectTimeoutRef.current = setTimeout(() => connect(currentMarketRef.current), 3000);
       };
 

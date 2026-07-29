@@ -24,28 +24,19 @@ export function useMultiMarketWS(enabled: boolean) {
     }
 
     try {
-      const appId = import.meta.env.VITE_DERIV_APP_ID || "1089";
+      const appId = import.meta.env.VITE_DERIV_APP_ID || "36544";
       const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
       wsRef.current = ws;
 
-      // Keep-alive: Deriv drops idle connections after ~60 s without a ping
       let pingInterval: ReturnType<typeof setInterval> | null = null;
 
       ws.onopen = () => {
         if (!mountedRef.current) return;
-        setIsConnected(true);
-        toast.success("Connected — All Markets Mode");
-        // Stagger subscription requests: sending all 10 at once triggers Deriv rate-limits
-        ALL_SYMBOLS.forEach((symbol, i) => {
-          setTimeout(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
-            }
-          }, i * 150); // 150 ms gap between each — stays under Deriv's burst limit
-        });
         pingInterval = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }));
         }, 30_000);
+        // Discover available symbols first
+        ws.send(JSON.stringify({ active_symbols: "brief", product_type: "basic" }));
       };
 
       ws.onmessage = (event) => {
@@ -53,21 +44,45 @@ export function useMultiMarketWS(enabled: boolean) {
         const data = JSON.parse(event.data);
         if (data.pong) return;
 
-        // If Deriv sends an error, handle based on whether it's recoverable
+        // ── active_symbols response → subscribe to all matching volatility symbols ──
+        if (data.active_symbols) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const available = new Set<string>(data.active_symbols.map((s: any) => s.symbol as string));
+          const toSubscribe = ALL_SYMBOLS.filter(s => available.has(s));
+
+          if (toSubscribe.length === 0) {
+            console.warn("[MultiMarketWS] No volatility symbols available with this app_id");
+            toast.error("No volatility markets available. Check your app_id.");
+            return;
+          }
+
+          setIsConnected(true);
+          toast.success(`Connected — All Markets Mode (${toSubscribe.length} markets)`);
+
+          // Stagger subscriptions 150 ms apart to stay under Deriv's burst limit
+          toSubscribe.forEach((symbol, i) => {
+            setTimeout(() => {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
+              }
+            }, i * 150);
+          });
+          return;
+        }
+
+        // ── error handling ──
         if (data.error) {
           const code = data.error.code;
           console.warn("[MultiMarketWS] error from Deriv:", code, data.error.message);
-          // Permanent errors: reconnecting won't help — skip this symbol's subscription
           if (code === "InvalidSymbol" || code === "InputValidationFailed") return;
-          // Transient errors (RateLimit, etc.): close so onclose triggers a reconnect
           ws.close();
           return;
         }
 
+        // ── tick data ──
         if (!data.tick) return;
 
         const { quote, epoch, symbol, pip_size } = data.tick;
-        // Use string formatting to avoid floating-point rounding errors
         const decimals = typeof pip_size === "number" ? pip_size : 2;
         const lastDigit = parseInt(quote.toFixed(decimals).slice(-1), 10);
         const newTick: Tick = { quote, epoch, lastDigit, symbol };
@@ -85,7 +100,6 @@ export function useMultiMarketWS(enabled: boolean) {
         if (!mountedRef.current) return;
         setIsConnected(false);
         if (enabled) {
-          toast.error("Reconnecting all markets...");
           reconnectRef.current = setTimeout(connect, 3000);
         }
       };
