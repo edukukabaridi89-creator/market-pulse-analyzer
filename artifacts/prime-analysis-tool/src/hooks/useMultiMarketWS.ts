@@ -29,14 +29,23 @@ export function useMultiMarketWS(enabled: boolean) {
       wsRef.current = ws;
 
       let pingInterval: ReturnType<typeof setInterval> | null = null;
+      let firstTickReceived = false;
 
       ws.onopen = () => {
         if (!mountedRef.current) return;
+        setIsConnected(true);
+        // Stagger subscriptions 150 ms apart to stay under Deriv's burst limit
+        ALL_SYMBOLS.forEach((symbol, i) => {
+          setTimeout(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
+            }
+          }, i * 150);
+        });
+        // Keep-alive ping every 30 s
         pingInterval = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }));
         }, 30_000);
-        // Discover available symbols first
-        ws.send(JSON.stringify({ active_symbols: "brief", product_type: "basic" }));
       };
 
       ws.onmessage = (event) => {
@@ -44,45 +53,26 @@ export function useMultiMarketWS(enabled: boolean) {
         const data = JSON.parse(event.data);
         if (data.pong) return;
 
-        // ── active_symbols response → subscribe to all matching volatility symbols ──
-        if (data.active_symbols) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const available = new Set<string>(data.active_symbols.map((s: any) => s.symbol as string));
-          const toSubscribe = ALL_SYMBOLS.filter(s => available.has(s));
-
-          if (toSubscribe.length === 0) {
-            console.warn("[MultiMarketWS] No volatility symbols available with this app_id");
-            toast.error("No volatility markets available. Check your app_id.");
-            return;
-          }
-
-          setIsConnected(true);
-          toast.success(`Connected — All Markets Mode (${toSubscribe.length} markets)`);
-
-          // Stagger subscriptions 150 ms apart to stay under Deriv's burst limit
-          toSubscribe.forEach((symbol, i) => {
-            setTimeout(() => {
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
-              }
-            }, i * 150);
-          });
-          return;
-        }
-
-        // ── error handling ──
         if (data.error) {
           const code = data.error.code;
           console.warn("[MultiMarketWS] error from Deriv:", code, data.error.message);
+          // InvalidSymbol just means that one market isn't available — skip it
           if (code === "InvalidSymbol" || code === "InputValidationFailed") return;
+          // Transient errors → reconnect the whole connection
           ws.close();
           return;
         }
 
-        // ── tick data ──
         if (!data.tick) return;
 
         const { quote, epoch, symbol, pip_size } = data.tick;
+
+        // Show connected toast on the very first tick across any market
+        if (!firstTickReceived) {
+          firstTickReceived = true;
+          toast.success("Connected — All Markets Mode");
+        }
+
         const decimals = typeof pip_size === "number" ? pip_size : 2;
         const lastDigit = parseInt(quote.toFixed(decimals).slice(-1), 10);
         const newTick: Tick = { quote, epoch, lastDigit, symbol };

@@ -21,26 +21,7 @@ export const VOLATILITY_MARKETS = [
   { symbol: "1HZ100V", label: "V100(1s)", name: "Volatility 100 (1s) Index" },
 ];
 
-// Pick the best available symbol from the same volatility family.
-// Prefers exact match, then same number in the other family (R_ ↔ 1HZ),
-// then any available volatility symbol.
-function pickBestSymbol(wanted: string, available: Set<string>): string | null {
-  if (available.has(wanted)) return wanted;
-
-  // Try the 1s-tick counterpart (R_100 ↔ 1HZ100V, R_10 ↔ 1HZ10V …)
-  const numMatch = wanted.match(/(\d+)/);
-  if (numMatch) {
-    const num = numMatch[1];
-    const alt = wanted.startsWith("1HZ") ? `R_${num}` : `1HZ${num}V`;
-    if (available.has(alt)) return alt;
-  }
-
-  // Fall back to any volatility symbol we recognise
-  for (const m of VOLATILITY_MARKETS) {
-    if (available.has(m.symbol)) return m.symbol;
-  }
-  return null;
-}
+const ALL_SYMBOLS = VOLATILITY_MARKETS.map(m => m.symbol);
 
 export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
   const [ticks, setTicks] = useState<Tick[]>([]);
@@ -70,22 +51,45 @@ export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
     }
 
     try {
-      // 36544 = Deriv API Explorer app — whitelisted for all domains.
-      // Fall back to any user-supplied ID from the environment.
       const appId = import.meta.env.VITE_DERIV_APP_ID || "36544";
       const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
       wsRef.current = ws;
 
       let pingInterval: ReturnType<typeof setInterval> | null = null;
 
+      // Track which symbols have already been tried so we never loop
+      const triedSymbols = new Set<string>([symbol]);
+      // Build the fallback order: requested symbol first, then the rest
+      const fallbackQueue = [symbol, ...ALL_SYMBOLS.filter(s => s !== symbol)];
+      let fallbackIndex = 0; // points to the next symbol to try after current
+
+      const subscribeNext = () => {
+        fallbackIndex++;
+        if (fallbackIndex >= fallbackQueue.length) {
+          console.warn("[DerivWS] All symbols returned InvalidSymbol — no markets available");
+          toast.error("No volatility markets available with this app_id.");
+          return;
+        }
+        const next = fallbackQueue[fallbackIndex];
+        if (!triedSymbols.has(next)) {
+          triedSymbols.add(next);
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ ticks: next, subscribe: 1 }));
+          }
+        } else {
+          subscribeNext(); // skip already-tried
+        }
+      };
+
       ws.onopen = () => {
         if (!isComponentMounted.current) return;
+        setIsConnected(true);
+        // Subscribe to the requested symbol immediately
+        ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
         // Keep-alive ping every 30 s
         pingInterval = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }));
         }, 30_000);
-        // Discover available symbols before subscribing
-        ws.send(JSON.stringify({ active_symbols: "brief", product_type: "basic" }));
       };
 
       ws.onmessage = (event) => {
@@ -93,42 +97,31 @@ export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
         const data = JSON.parse(event.data);
         if (data.pong) return;
 
-        // ── active_symbols response → subscribe to the best available symbol ──
-        if (data.active_symbols) {
-          const available = new Set<string>(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            data.active_symbols.map((s: any) => s.symbol as string)
-          );
-          const target = pickBestSymbol(symbol, available);
-          if (target) {
-            setIsConnected(true);
-            ws.send(JSON.stringify({ ticks: target, subscribe: 1 }));
-            const name = VOLATILITY_MARKETS.find(m => m.symbol === target)?.name ?? target;
-            toast.success(`Connected — ${name}${target !== symbol ? ` (${symbol} unavailable, using ${target})` : ""}`);
-          } else {
-            console.warn("[DerivWS] No volatility symbols available with this app_id");
-            toast.error("No volatility markets available. Check your app_id.");
-          }
-          return;
-        }
-
-        // ── error handling ──
         if (data.error) {
           const code = data.error.code;
           console.warn("[DerivWS] error from Deriv:", code, data.error.message);
-          // Transient errors → reconnect; permanent symbol errors → log and skip
-          if (code === "InvalidSymbol" || code === "InputValidationFailed") return;
+          if (code === "InvalidSymbol" || code === "InputValidationFailed") {
+            // This symbol is not available — silently try the next one
+            subscribeNext();
+            return;
+          }
+          // Transient errors (rate limit, etc.) → close and reconnect
           ws.close();
           return;
         }
 
-        // ── tick data ──
         if (data.tick) {
           const { quote, epoch, pip_size } = data.tick;
+          const activeSymbol: string = data.tick.symbol ?? symbol;
+          // Show Connected toast on the very first tick received
+          if (ticks.length === 0) {
+            const name = VOLATILITY_MARKETS.find(m => m.symbol === activeSymbol)?.name ?? activeSymbol;
+            toast.success(`Connected — ${name}`);
+          }
           const decimals = typeof pip_size === "number" ? pip_size : 2;
           const lastDigit = parseInt(quote.toFixed(decimals).slice(-1), 10);
           setTicks(prev => {
-            const newTick: Tick = { quote, epoch, lastDigit, symbol: data.tick.symbol ?? symbol };
+            const newTick: Tick = { quote, epoch, lastDigit, symbol: activeSymbol };
             const next = [newTick, ...prev];
             if (next.length > 200) next.length = 200;
             return next;
@@ -148,7 +141,7 @@ export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
       setIsConnected(false);
       reconnectTimeoutRef.current = setTimeout(() => connect(currentMarketRef.current), 3000);
     }
-  }, []);
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!enabled) {
