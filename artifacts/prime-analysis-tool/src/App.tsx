@@ -52,10 +52,11 @@ function OAuthCallback() {
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Landing} />
+      <Route path="/" component={Dashboard} />
+      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/landing" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
-      <Route path="/dashboard" component={Dashboard} />
       <Route path="/analysis" component={Analysis} />
       <Route path="/history" component={History} />
       <Route path="/settings" component={Settings} />
@@ -80,63 +81,6 @@ function GlobalAlerts() {
 }
 
 function App() {
-  useEffect(() => {
-    const redirect = () => {
-      window.location.href =
-        "https://www.google.com/search?q=hauna+skills+za+kuhack+hii,+hata+Mr+Duke+hawezi,+go+better+yourself+then+comeback";
-    };
-
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-      redirect();
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-
-      if (e.key === "F12") {
-        e.preventDefault();
-        redirect();
-        return;
-      }
-
-      if (e.ctrlKey && e.shiftKey) {
-        if (["i", "j", "c"].includes(key)) {
-          e.preventDefault();
-          redirect();
-          return;
-        }
-      }
-
-      if (e.ctrlKey && key === "u") {
-        e.preventDefault();
-        redirect();
-        return;
-      }
-
-      if (e.metaKey && e.altKey) {
-        if (["i", "j", "c"].includes(key)) {
-          e.preventDefault();
-          redirect();
-          return;
-        }
-      }
-
-      if (e.metaKey && key === "u") {
-        e.preventDefault();
-        redirect();
-      }
-    };
-
-    document.addEventListener("contextmenu", handleContextMenu);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("contextmenu", handleContextMenu);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

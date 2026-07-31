@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   DollarSign, Activity, CheckCircle2, XCircle, Clock,
@@ -8,7 +7,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { useAuth } from "@/hooks/useAuth";
 import { useTick } from "@/contexts/TickContext";
 import { useDerivAuth } from "@/contexts/DerivAuthContext";
 import {
@@ -76,8 +74,6 @@ function computeAutoBarrier(ticks: Tick[], type: string): { barrier?: string; ba
 }
 
 export default function Trade() {
-  const [, setLocation] = useLocation();
-  const { user, isLoading } = useAuth();
   const {
     ticks, isConnected, market, setMarket,
     analysisType, setAnalysisType, barrier, setBarrier,
@@ -109,17 +105,11 @@ export default function Trade() {
     [ticks, analysisType]
   );
 
-  useEffect(() => {
-    if (!isLoading && !user) setLocation("/login");
-  }, [user, isLoading, setLocation]);
-
   // When switching category, auto-select first type in that category
   useEffect(() => {
     const first = ANALYSIS_TYPES.find(t => t.category === activeCategory);
     if (first) setAnalysisType(first.type);
   }, [activeCategory, setAnalysisType]);
-
-  if (isLoading || !user) return null;
 
   const effectiveStake = customStake ? parseFloat(customStake) || 0 : stake;
   const isMultiplier = activeCategory === "multipliers";
