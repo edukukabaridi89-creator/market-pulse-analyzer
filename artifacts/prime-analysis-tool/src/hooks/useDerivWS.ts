@@ -27,7 +27,7 @@ export function useDerivWS(market: string = "R_100", enabled: boolean = true) {
   const [ticks, setTicks] = useState<Tick[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const isComponentMounted = useRef(true);
   const currentMarketRef = useRef(market);
 

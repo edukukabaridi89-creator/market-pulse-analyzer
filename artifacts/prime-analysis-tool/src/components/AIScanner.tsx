@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getMultiMarketAdvice, ANALYSIS_TYPES } from "@/hooks/useTickAnalysis";
+import { getMultiMarketAdvice, ANALYSIS_TYPES, AnalysisType } from "@/hooks/useTickAnalysis";
 import { analysisTypeToContract, BuyParams, TradeResult } from "@/hooks/useDerivTrading";
 import { VOLATILITY_MARKETS, Tick } from "@/hooks/useDerivWS";
 import type { DerivAccount } from "@/contexts/DerivAuthContext";
@@ -30,7 +30,7 @@ export function AIScanner({
 }: AIScannerProps) {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<ScanPhase>("config");
-  const [tradeType, setTradeType] = useState("even");
+  const [tradeType, setTradeType] = useState<AnalysisType>("even");
   const [initialStake, setInitialStake] = useState("1");
   const [martingale, setMartingale] = useState("2.2");
   const [bestMarket, setBestMarket] = useState<{ symbol: string; label: string; name: string; probability: number } | null>(null);
@@ -247,7 +247,7 @@ export function AIScanner({
                       <label className="text-xs text-muted-foreground block mb-1.5">Trade Type</label>
                       <select
                         value={tradeType}
-                        onChange={e => setTradeType(e.target.value)}
+                        onChange={e => setTradeType(e.target.value as AnalysisType)}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary/50 cursor-pointer"
                       >
                         {ANALYSIS_TYPES.map(at => (

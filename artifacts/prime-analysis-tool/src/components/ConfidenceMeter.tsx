@@ -41,7 +41,7 @@ export function ConfidenceMeter({ confidence }: ConfidenceMeterProps) {
           transition={{ duration: 0.5, ease: "easeInOut" }}
           strokeLinecap="round"
           className={color}
-          style={{ dropShadow: "0 0 8px currentColor" }}
+          style={{ filter: "drop-shadow(0 0 8px currentColor)" }}
         />
       </svg>
       <div className="absolute flex flex-col items-center justify-center">

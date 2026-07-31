@@ -8,7 +8,7 @@ export function useAuth() {
   const [, setLocation] = useLocation();
 
   const login = useCallback(async (_username: string, _password: string) => {
-    return { success: true };
+    return { success: true, message: "" };
   }, []);
 
   const logout = useCallback(() => {
