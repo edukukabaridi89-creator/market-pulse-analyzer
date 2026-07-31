@@ -1,7 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart2, Layers, Zap, ArrowRight } from "lucide-react";
 
+import { useAuth } from "@/hooks/useAuth";
 import { useTick } from "@/contexts/TickContext";
 import { useTickAnalysis, ANALYSIS_TYPES, getMultiMarketAdvice } from "@/hooks/useTickAnalysis";
 import { generateAllTypeAdvice } from "@/hooks/useTickAnalysis";
@@ -218,11 +220,17 @@ function MultiMarketCard({ symbol, advice, tc, idx, ticks }: MultiMarketCardProp
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Analysis() {
+  const [, setLocation] = useLocation();
+  const { user, isLoading } = useAuth();
   const {
     ticks, isConnected, market, allMarketsMode, tickMap,
     analysisType, setAnalysisType, barrier, setBarrier,
     filterTicks, settings, marketInfo,
   } = useTick();
+
+  useEffect(() => {
+    if (!isLoading && !user) setLocation("/login");
+  }, [user, isLoading, setLocation]);
 
   const windowTicks = filterTicks(ticks);
   const analysis = useTickAnalysis(windowTicks, analysisType, barrier);
@@ -236,6 +244,8 @@ export default function Analysis() {
   const windowLabel = settings.mode === "ticks"
     ? `${windowTicks.length} ticks`
     : `${settings.minutes} min (${windowTicks.length} ticks)`;
+
+  if (isLoading || !user) return null;
 
   const multiMarketResults = getMultiMarketAdvice(tickMap, analysisType, barrier);
 

@@ -106,11 +106,15 @@ export default function Landing() {
           <Link href="/login">
             <Button variant="ghost" className="text-muted-foreground hover:text-white">Login</Button>
           </Link>
-          <Link href="/signup">
+          <a
+            href="https://wa.me/27114972670?text=Hi%2C%20I%27m%20interested%20in%20getting%20access%20to%20PrimeAnalysisTool.%20Could%20you%20please%20share%20the%20payment%20details%3F%20Thank%20you."
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             <Button className="bg-gradient-to-r from-[#00c6ff] to-[#0072ff] hover:opacity-90 shadow-[0_0_15px_rgba(0,198,255,0.4)] border-none">
-              Get Access — $100
+              Get Access — $150
             </Button>
-          </Link>
+          </a>
         </div>
       </nav>
 
@@ -142,12 +146,16 @@ export default function Landing() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Link href="/signup">
+            <a
+              href="https://wa.me/27114972670?text=Hi%2C%20I%27m%20interested%20in%20getting%20access%20to%20PrimeAnalysisTool.%20Could%20you%20please%20share%20the%20payment%20details%3F%20Thank%20you."
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <Button size="lg" className="h-14 px-8 text-base bg-white text-black hover:bg-gray-200 border-none">
-                Get Lifetime Access — $100
+                Get Lifetime Access — $150
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
-            </Link>
+            </a>
             <Link href="/login">
               <Button size="lg" variant="outline" className="h-14 px-8 text-base glass-card">
                 Dashboard Login
@@ -247,7 +255,7 @@ export default function Landing() {
                 LIFETIME ACCESS
               </div>
               <div className="flex items-end justify-center gap-2 mb-6">
-                <span className="text-6xl font-black text-white">$100</span>
+                <span className="text-6xl font-black text-white">$150</span>
                 <span className="text-muted-foreground mb-2">one-time</span>
               </div>
               <ul className="space-y-3 text-sm text-left mb-8">
@@ -266,14 +274,19 @@ export default function Landing() {
                   </li>
                 ))}
               </ul>
-              <Link href="/signup">
+              <a
+                href="https://wa.me/27114972670?text=Hi%2C%20I%27m%20interested%20in%20getting%20access%20to%20PrimeAnalysisTool.%20Could%20you%20please%20share%20the%20payment%20details%3F%20Thank%20you."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block"
+              >
                 <Button size="lg" className="w-full h-14 text-base bg-gradient-to-r from-primary to-[#0055ff] border-none text-white shadow-[0_0_30px_rgba(0,198,255,0.3)] hover:opacity-90">
-                  Proceed to Tool — $100
+                  Get Access via WhatsApp — $150
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
-              </Link>
+              </a>
               <p className="text-xs text-muted-foreground mt-3">
-                Secure checkout · Instant access after payment
+                Message us on WhatsApp to get your login credentials after payment
               </p>
             </div>
           </motion.div>
@@ -323,13 +336,17 @@ export default function Landing() {
         <div className="relative z-10 max-w-2xl space-y-6">
           <ShieldAlert className="w-12 h-12 text-primary mx-auto opacity-80" />
           <h2 className="text-4xl font-bold text-white">Ready to Trade Smarter?</h2>
-          <p className="text-lg text-muted-foreground">Lifetime access. One-time payment of $100. Unparalleled market vision.</p>
-          <Link href="/signup">
+          <p className="text-lg text-muted-foreground">Lifetime access. One-time payment of $150. Unparalleled market vision.</p>
+          <a
+            href="https://wa.me/27114972670?text=Hi%2C%20I%27m%20interested%20in%20getting%20access%20to%20PrimeAnalysisTool.%20Could%20you%20please%20share%20the%20payment%20details%3F%20Thank%20you."
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             <Button size="lg" className="mt-4 bg-gradient-to-r from-primary to-[#0055ff] border-none text-white h-14 px-10 shadow-[0_0_30px_rgba(0,198,255,0.3)] hover:opacity-90">
-              Proceed to Tool — $100
+              Get Access via WhatsApp — $150
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
-          </Link>
+          </a>
           <p className="text-xs text-muted-foreground">
             By proceeding you confirm you have read and accepted the Terms & Conditions above.
           </p>
