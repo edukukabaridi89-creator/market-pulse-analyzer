@@ -72,10 +72,10 @@ function generateAdvice(type: AnalysisType, barrier: number, ticks: Tick[]): Tra
   const sample = ticks.slice(0, 100);
   const n = sample.length;
 
-  if (n < 10) {
+  if (n < 3) {
     return {
       action: "WAIT", label: "Collecting data...", probability: 0, confidence: "LOW",
-      reason: "Not enough ticks yet. Wait for at least 10 ticks.",
+      reason: "Not enough ticks yet. Wait for at least 3 ticks.",
       entry: "Wait for more data.", risk: "High", contractType: type.toUpperCase(),
     };
   }

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { toast } from "sonner";
 
-const APP_ID = import.meta.env.VITE_DERIV_APP_ID || "1089";
+const APP_ID = import.meta.env.VITE_DERIV_APP_ID || "36544";
 
 export interface DerivAccount {
   loginid: string;
