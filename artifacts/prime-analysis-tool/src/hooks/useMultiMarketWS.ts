@@ -24,8 +24,7 @@ export function useMultiMarketWS(enabled: boolean) {
     }
 
     try {
-      const appId = import.meta.env.VITE_DERIV_APP_ID || "36544";
-      const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+      const ws = new WebSocket("wss://api.derivws.com/trading/v1/options/ws/public");
       wsRef.current = ws;
 
       let pingInterval: ReturnType<typeof setInterval> | null = null;
