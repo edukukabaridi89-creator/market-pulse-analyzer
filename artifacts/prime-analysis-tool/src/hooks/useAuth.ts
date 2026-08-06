@@ -1,17 +1,120 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 
+// ── MASTER USER LIST ───────────────────────────────────────────────────────────
+//
+// HOW DEVICE-LOCKING WORKS
+// ─────────────────────────
+// Every entry below has `device: null`.  On a user's FIRST successful login the
+// app builds a SHA-256 hardware fingerprint of their browser (GPU, screen, audio,
+// canvas, CPU cores, timezone, etc.) and stores it permanently in their browser's
+// localStorage under the key  "prime_users_v2".
+//
+// From that point on, every login attempt from a DIFFERENT device is blocked with
+// "⛔ Access denied. This account is locked to a different device."
+// The device field in THIS file is intentionally kept null — the binding lives
+// in the user's own browser storage, so you never have to edit this file after
+// you hand credentials to a client.
+//
+// HOW TO ADD A NEW PAYING CLIENT
+// ───────────────────────────────
+// 1. Pick any unused row below (or copy-paste the template at the bottom).
+// 2. Set the username and password to whatever you want to give the client.
+// 3. Leave  device: null  — it will auto-lock on their first login.
+// 4. Save the file and redeploy / restart the app.
+// 5. Send the client their credentials — they log in once and the device binds.
+//
+// HOW TO RESET A CLIENT'S DEVICE (e.g. they got a new laptop)
+// ─────────────────────────────────────────────────────────────
+// Ask the client to open the browser console on their OLD device and run:
+//   localStorage.removeItem("prime_users_v2")
+// Then have them log in from the new device — it will re-bind automatically.
+// (If they can't access the old device, you can do this from your admin session.)
+//
+// HOW TO REVOKE / DISABLE AN ACCOUNT
+// ────────────────────────────────────
+// Delete or comment-out the user's row below and redeploy.  Their credentials
+// will no longer match any entry in this list.
+//
+// SECURITY NOTE
+// ─────────────
+// Credentials are checked entirely in the browser (client-side).  This is fine
+// for pay-gating a tool like this, but means a determined developer *could* bypass
+// login by inspecting the JS bundle.  For higher-security needs, move auth to the
+// Express API server (artifacts/api-server) so credentials never leave the server.
+// ──────────────────────────────────────────────────────────────────────────────
+
 const users = [
-  { username: "123demo", password: "demo123", device: null },
-  { username: "edwin", password: "edwin", device: null },
-  { username: "user12", password: "pass123", device: null },
-  { username: "user23", password: "pass4479", device: null },
-  { username: "user34", password: "pass6789", device: null },
-  { username: "user45", password: "pass321", device: null },
-  { username: "user56", password: "pass6543", device: null },
-  { username: "lonchezz", password: "lonchezz254", device: null },
-  { username: "Justin1", password: "Justin1", device: null },
-  { username: "1unknownmentor1", password: "1unknownmentor1", device: null },
+  // ── DEMO / TEST ACCOUNTS (do not hand these out) ───────────────────────────
+  { username: "123demo",          password: "demo123",        device: null }, // demo — for testing only
+  { username: "admintest",        password: "prime@admin99",  device: null }, // internal test account
+
+  // ── EXISTING CLIENTS ───────────────────────────────────────────────────────
+  { username: "edwin",            password: "edwin",          device: null },
+  { username: "lonchezz",         password: "lonchezz254",    device: null },
+  { username: "Justin1",          password: "Justin1",        device: null },
+  { username: "1unknownmentor1",  password: "1unknownmentor1",device: null },
+  { username: "user12",           password: "pass123",        device: null },
+  { username: "user23",           password: "pass4479",       device: null },
+  { username: "user34",           password: "pass6789",       device: null },
+  { username: "user45",           password: "pass321",        device: null },
+  { username: "user56",           password: "pass6543",       device: null },
+
+  // ── AVAILABLE SLOTS — assign to new paying clients as needed ──────────────
+  // Replace username/password before giving to a client; leave device: null
+  { username: "prime001",         password: "Pr1me@7741",     device: null },
+  { username: "prime002",         password: "Pr1me@8832",     device: null },
+  { username: "prime003",         password: "Pr1me@9923",     device: null },
+  { username: "prime004",         password: "Pr1me@1104",     device: null },
+  { username: "prime005",         password: "Pr1me@2215",     device: null },
+  { username: "prime006",         password: "Pr1me@3326",     device: null },
+  { username: "prime007",         password: "Pr1me@4437",     device: null },
+  { username: "prime008",         password: "Pr1me@5548",     device: null },
+  { username: "prime009",         password: "Pr1me@6659",     device: null },
+  { username: "prime010",         password: "Pr1me@7760",     device: null },
+  { username: "prime011",         password: "Tr4de@8811",     device: null },
+  { username: "prime012",         password: "Tr4de@9922",     device: null },
+  { username: "prime013",         password: "Tr4de@1033",     device: null },
+  { username: "prime014",         password: "Tr4de@2144",     device: null },
+  { username: "prime015",         password: "Tr4de@3255",     device: null },
+  { username: "prime016",         password: "Tr4de@4366",     device: null },
+  { username: "prime017",         password: "Tr4de@5477",     device: null },
+  { username: "prime018",         password: "Tr4de@6588",     device: null },
+  { username: "prime019",         password: "Tr4de@7699",     device: null },
+  { username: "prime020",         password: "Tr4de@8800",     device: null },
+  { username: "prime021",         password: "S1gnal@9901",    device: null },
+  { username: "prime022",         password: "S1gnal@1012",    device: null },
+  { username: "prime023",         password: "S1gnal@2123",    device: null },
+  { username: "prime024",         password: "S1gnal@3234",    device: null },
+  { username: "prime025",         password: "S1gnal@4345",    device: null },
+  { username: "prime026",         password: "S1gnal@5456",    device: null },
+  { username: "prime027",         password: "S1gnal@6567",    device: null },
+  { username: "prime028",         password: "S1gnal@7678",    device: null },
+  { username: "prime029",         password: "S1gnal@8789",    device: null },
+  { username: "prime030",         password: "S1gnal@9890",    device: null },
+  { username: "prime031",         password: "Deriv@7741x",    device: null },
+  { username: "prime032",         password: "Deriv@8832x",    device: null },
+  { username: "prime033",         password: "Deriv@9923x",    device: null },
+  { username: "prime034",         password: "Deriv@1104x",    device: null },
+  { username: "prime035",         password: "Deriv@2215x",    device: null },
+  { username: "prime036",         password: "Deriv@3326x",    device: null },
+  { username: "prime037",         password: "Deriv@4437x",    device: null },
+  { username: "prime038",         password: "Deriv@5548x",    device: null },
+  { username: "prime039",         password: "Deriv@6659x",    device: null },
+  { username: "prime040",         password: "Deriv@7760x",    device: null },
+  { username: "prime041",         password: "V0lat@8811k",    device: null },
+  { username: "prime042",         password: "V0lat@9922k",    device: null },
+  { username: "prime043",         password: "V0lat@1033k",    device: null },
+  { username: "prime044",         password: "V0lat@2144k",    device: null },
+  { username: "prime045",         password: "V0lat@3255k",    device: null },
+  { username: "prime046",         password: "V0lat@4366k",    device: null },
+  { username: "prime047",         password: "V0lat@5477k",    device: null },
+  { username: "prime048",         password: "V0lat@6588k",    device: null },
+  { username: "prime049",         password: "V0lat@7699k",    device: null },
+  { username: "prime050",         password: "V0lat@8800k",    device: null },
+
+  // ── TEMPLATE — copy this line when adding a new client ────────────────────
+  // { username: "clientName",    password: "ChangeMe@123",   device: null },
 ];
 
 // ── Device Fingerprint ─────────────────────────────────────────────────────────
