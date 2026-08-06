@@ -565,7 +565,7 @@ export default function Dashboard() {
                       Connect Deriv Account
                     </Button>
                     <p className="text-center text-xs text-muted-foreground">
-                      Redirects to Deriv OAuth · App ID {import.meta.env.VITE_DERIV_APP_ID || "110877"}
+                      Redirects to Deriv OAuth · App ID {import.meta.env.VITE_DERIV_APP_ID || "36544"}
                     </p>
                   </div>
                 ) : (
